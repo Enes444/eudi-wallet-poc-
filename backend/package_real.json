@@ -1,0 +1,17 @@
+{
+  "name": "eudi-wallet-poc-backend",
+  "version": "3.0.0",
+  "description": "EUDI Wallet POC – mit echter OpenID4VP Integration",
+  "main": "server_real.js",
+  "scripts": {
+    "start":      "node server_real.js",
+    "start:demo": "node server.js",
+    "dev":        "node --watch server_real.js"
+  },
+  "dependencies": {
+    "@sphereon/siop-oid4vp": "^0.16.1",
+    "@sphereon/oid4vc-common": "^0.16.1",
+    "jose":    "^5.9.6",
+    "qrcode":  "^1.5.4"
+  }
+}
