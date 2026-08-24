@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>EUDI Wallet</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --eu:#123C8C; --eu-deep:#0C2A63; --eu-soft:#E8EEF9;
+  --ink:#131A2A; --soft:#5A6478; --bg:#F2F4F8; --card:#fff;
+  --gold:#C9A227; --seal:#0E6B4F; --warn:#8A2F23;
+  --line:#E2E6EE;
+  --sans:'Public Sans',system-ui,sans-serif; --disp:'Archivo',var(--sans); --mono:'Spline Sans Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);min-height:100vh;display:flex;flex-direction:column;max-width:430px;margin:0 auto}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--eu);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* Statusbar + App-Kopf */
+.sbar{display:flex;justify-content:space-between;padding:8px 18px 0;font-family:var(--mono);font-size:11px;color:var(--soft)}
+.apphead{padding:10px 18px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);background:#fff}
+.applogo{width:34px;height:34px;border-radius:8px;background:var(--eu);display:flex;align-items:center;justify-content:center}
+.applogo svg{width:20px;height:20px}
+.appname{font-family:var(--disp);font-weight:700;font-size:15px}
+.appsub{font-size:10.5px;color:var(--soft)}
+
+main{flex:1;padding:16px;display:flex;flex-direction:column;gap:14px}
+
+/* Anfrage-Karte */
+.req{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.req-h{padding:14px 16px;display:flex;gap:11px;align-items:center;border-bottom:1px solid var(--line)}
+.req-logo{width:38px;height:38px;border-radius:8px;background:#0E1B33;color:#fff;font-family:var(--disp);font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;letter-spacing:.02em}
+.req-t{font-weight:600;font-size:14px}
+.req-d{font-size:11.5px;color:var(--soft)}
+.req-verified{margin-left:auto;font-size:10px;color:var(--seal);border:1px solid var(--seal);border-radius:20px;padding:2px 8px;font-weight:600;white-space:nowrap}
+.req-b{padding:12px 16px;font-size:12.5px;color:var(--soft)}
+
+/* Credential-Karten */
+.cred{border-radius:12px;padding:14px 16px;color:#fff;position:relative;overflow:hidden;display:flex;flex-direction:column;gap:10px}
+.cred::after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;border:1.5px solid rgba(255,255,255,.14)}
+.cred.pid{background:linear-gradient(135deg,#123C8C,#0C2A63)}
+.cred.mdl{background:linear-gradient(135deg,#2C3E62,#1B2743)}
+.cred.iban{background:linear-gradient(135deg,#0E6B4F,#08442F)}
+.cred.off{opacity:.38;filter:grayscale(.5)}
+.cred-top{display:flex;justify-content:space-between;align-items:baseline}
+.cred-name{font-family:var(--disp);font-weight:600;font-size:13.5px}
+.cred-type{font-family:var(--mono);font-size:9.5px;opacity:.75}
+.cred-holder{font-size:12px;opacity:.92}
+.share{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--mono);font-size:9.5px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22);border-radius:20px;padding:3px 9px}
+.cred-missing{font-size:11px;font-family:var(--mono)}
+
+/* Szenario */
+.sc-box{background:#fff;border:1px dashed var(--line);border-radius:12px;padding:12px 14px}
+.sc-l{font-family:var(--mono);font-size:10px;color:var(--soft);letter-spacing:.06em;margin-bottom:8px}
+.sc-row{display:flex;gap:6px;flex-wrap:wrap}
+.sc{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 12px;font-size:11.5px;color:var(--soft)}
+.sc[aria-pressed="true"]{border-color:var(--eu);background:var(--eu-soft);color:var(--eu);font-weight:600}
+
+/* Aktionen */
+.actions{padding:14px 16px 22px;display:flex;flex-direction:column;gap:9px;background:#fff;border-top:1px solid var(--line)}
+.btn{border:none;border-radius:10px;padding:14px;font-weight:600;font-size:14.5px;transition:transform .1s}
+.btn:active{transform:scale(.985)}
+.approve{background:var(--eu);color:#fff}.approve:hover{background:var(--eu-deep)}
+.reject{background:transparent;border:1.5px solid var(--line);color:var(--soft)}.reject:hover{border-color:var(--soft)}
+
+/* Ergebnis-Overlay */
+.done{position:fixed;inset:0;background:rgba(242,244,248,.97);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:30px;text-align:center}
+.done.show{display:flex;animation:fade .3s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.done .ring{width:86px;height:86px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid var(--seal);animation:pop .4s cubic-bezier(.2,1.4,.4,1)}
+.done.rej .ring{border-color:var(--soft)}
+@keyframes pop{from{transform:scale(.5);opacity:0}}
+.done .ring svg{width:40px;height:40px}
+.done h2{font-family:var(--disp);font-size:19px}
+.done p{font-size:13px;color:var(--soft);max-width:30ch}
+.done .mono{font-family:var(--mono);font-size:10.5px;color:var(--soft)}
+</style>
+</head>
+<body>
+<div class="sbar"><span id="clock">–:–</span><span>EUDI · Sandbox</span></div>
+<div class="apphead">
+  <div class="applogo"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#C9A227" stroke-width="1.4"/><path d="M12 6.5l1.2 2.6 2.8.3-2.1 1.9.6 2.8-2.5-1.5-2.5 1.5.6-2.8-2.1-1.9 2.8-.3z" fill="#C9A227"/></svg></div>
+  <div><div class="appname">EUDI Wallet</div><div class="appsub">Testumgebung · Max Mustermann</div></div>
+</div>
+
+<main>
+  <div class="req">
+    <div class="req-h">
+      <div class="req-logo">OEV</div>
+      <div><div class="req-t">OEV Versicherung</div><div class="req-d">fordert Nachweise für einen Kfz-Antrag an</div></div>
+      <div class="req-verified">Geprüfter Dienst</div>
+    </div>
+    <div class="req-b">Nur die markierten Merkmale werden übertragen — signiert und an diesen Vorgang gebunden.</div>
+  </div>
+
+  <div class="cred pid" id="cardPid">
+    <div class="cred-top"><span class="cred-name">Personalausweis</span><span class="cred-type">PID · Bundesdruckerei</span></div>
+    <div class="cred-holder" id="pidHolder">Max Mustermann</div>
+    <div class="share"><span class="chip">age_over_18</span><span class="chip">given_name</span><span class="chip">family_name</span></div>
+  </div>
+
+  <div class="cred mdl" id="cardMdl">
+    <div class="cred-top"><span class="cred-name">Führerschein</span><span class="cred-type">mDL · Fahrerlaubnisbehörde</span></div>
+    <div class="cred-holder" id="mdlBody">Klassen B, AM · gültig bis 2030</div>
+    <div class="share" id="mdlShare"><span class="chip">driving_privileges</span><span class="chip">expiry_date</span></div>
+  </div>
+
+  <div class="cred iban" id="cardIban">
+    <div class="cred-top"><span class="cred-name">Bankverbindung</span><span class="cred-type">EAA · Commerzbank</span></div>
+    <div class="cred-holder">DE89 ···· ···· 3000</div>
+    <div class="share"><span class="chip">iban</span><span class="chip">verified</span></div>
+  </div>
+
+  <div class="sc-box">
+    <div class="sc-l">DEMO-SZENARIO</div>
+    <div class="sc-row" role="group">
+      <button class="sc" data-sc="success" aria-pressed="true">Alles vorhanden</button>
+      <button class="sc" data-sc="no_license" aria-pressed="false">Kein Führerschein</button>
+      <button class="sc" data-sc="underage" aria-pressed="false">Minderjährig</button>
+    </div>
+  </div>
+</main>
+
+<div class="actions">
+  <button class="btn approve" id="ok">Nachweise freigeben</button>
+  <button class="btn reject" id="no">Ablehnen</button>
+</div>
+
+<div class="done" id="done">
+  <div class="ring" id="ring"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#0E6B4F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <h2 id="dTitle">Nachweise übermittelt</h2>
+  <p id="dText">Signierte SD-JWT-Nachweise wurden an OEV Versicherung gesendet.</p>
+  <div class="mono" id="dMeta"></div>
+</div>
+
+<script>
+const q=new URLSearchParams(location.search);
+const sessionId=q.get('session'); let scenario=q.get('scenario')||'success';
+document.getElementById('clock').textContent=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+
+const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+function applyScenario(){
+  $$('.sc').forEach(b=>b.setAttribute('aria-pressed', b.dataset.sc===scenario ? 'true':'false'));
+  // mDL-Karte
+  const mdl=$('#cardMdl');
+  if(scenario==='no_license'){ mdl.classList.add('off'); $('#mdlBody').textContent='Kein Führerschein in dieser Wallet'; $('#mdlShare').innerHTML='<span class="cred-missing">— nicht verfügbar —</span>'; }
+  else { mdl.classList.remove('off'); $('#mdlBody').textContent='Klassen B, AM · gültig bis 2030'; $('#mdlShare').innerHTML='<span class="chip">driving_privileges</span><span class="chip">expiry_date</span>'; }
+  // PID-Karte
+  $('#pidHolder').textContent = scenario==='underage' ? 'Tom Schmidt (16)' : 'Max Mustermann';
+}
+$$('.sc').forEach(b=>b.addEventListener('click',()=>{scenario=b.dataset.sc;applyScenario()}));
+applyScenario();
+
+async function send(action){
+  try{
+    await fetch(`/api/wallet/callback`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({state:sessionId,action,scenario})});
+  }catch{}
+  const rej=action==='reject';
+  $('#done').classList.toggle('rej',rej);
+  $('#ring').innerHTML = rej
+    ? '<svg viewBox="0 0 24 24" fill="none"><path d="M7 7l10 10M17 7L7 17" stroke="#5A6478" stroke-width="2.4" stroke-linecap="round"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#0E6B4F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  $('#dTitle').textContent = rej ? 'Freigabe abgelehnt' : 'Nachweise übermittelt';
+  $('#dText').textContent  = rej ? 'Es wurden keine Daten übertragen. Sie können dieses Fenster schließen.'
+                                 : 'Signierte SD-JWT-Nachweise wurden an OEV Versicherung gesendet. Sie können dieses Fenster schließen.';
+  $('#dMeta').textContent = 'Vorgang '+(sessionId||'').slice(0,8)+' · '+(rej?'keine Übertragung':'ES256-signiert · nonce-gebunden');
+  $('#done').classList.add('show');
+  setTimeout(()=>{ try{window.close()}catch{} }, 2600);
+}
+$('#ok').addEventListener('click',()=>send('approve'));
+$('#no').addEventListener('click',()=>send('reject'));
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+node_modules/
+wallet-storage.json
+trust-registry.json
+package-lock.json
+.env

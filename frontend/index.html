@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OEV · Kfz-Antrag mit EUDI-Wallet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0E1B33; --ink-soft:#3A4560;
+  --paper:#F7F6F2; --card:#FFFFFF;
+  --eu:#123C8C; --eu-soft:#E8EEF9;
+  --gold:#C9A227; --gold-soft:#F7F0DC;
+  --seal:#0E6B4F; --seal-soft:#E4F1EB;
+  --warn:#8A2F23; --warn-soft:#F7E7E4;
+  --line:#DDD9CE; --line-soft:#ECE9E0;
+  --mono:'Spline Sans Mono',ui-monospace,monospace;
+  --sans:'Public Sans',system-ui,sans-serif;
+  --disp:'Archivo',var(--sans);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--sans);background:var(--paper);color:var(--ink);min-height:100vh;line-height:1.55}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--eu);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* ── Kopf: Dokumentleiste ── */
+header{background:var(--ink);color:#fff;border-bottom:3px solid var(--gold)}
+.head-in{max-width:860px;margin:0 auto;padding:14px 24px;display:flex;align-items:baseline;gap:14px}
+.wordmark{font-family:var(--disp);font-weight:700;font-size:17px;letter-spacing:.02em}
+.wordmark span{color:var(--gold)}
+.head-meta{margin-left:auto;font-family:var(--mono);font-size:11px;color:#9FB0D0}
+
+/* ── Vorgangs-Ledger ── */
+.ledger{max-width:860px;margin:0 auto;padding:20px 24px 0;display:flex;gap:0;border-bottom:1px solid var(--line)}
+.lstep{flex:1;padding:10px 4px 14px;border-bottom:3px solid transparent;color:var(--ink-soft);font-size:12.5px;display:flex;gap:8px;align-items:baseline}
+.lstep .n{font-family:var(--mono);font-size:11px;color:#9A958A}
+.lstep.on{border-bottom-color:var(--eu);color:var(--ink);font-weight:600}
+.lstep.on .n{color:var(--eu)}
+.lstep.done{color:var(--seal)} .lstep.done .n{color:var(--seal)}
+
+/* ── Bühne ── */
+main{max-width:860px;margin:0 auto;padding:28px 24px 64px}
+.stage{display:none}.stage.on{display:block;animation:rise .35s ease}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+h1{font-family:var(--disp);font-weight:700;font-size:clamp(24px,3.4vw,32px);letter-spacing:-.01em;margin-bottom:4px}
+.sub{color:var(--ink-soft);font-size:14.5px;margin-bottom:26px;max-width:56ch}
+
+/* ── Formular als Dokument ── */
+.doc{background:var(--card);border:1px solid var(--line);border-radius:6px;box-shadow:0 1px 0 rgba(14,27,51,.04)}
+.doc + .doc{margin-top:16px}
+.doc-h{padding:13px 20px;border-bottom:1px solid var(--line-soft);display:flex;align-items:baseline;gap:10px}
+.doc-h .tag{font-family:var(--mono);font-size:10.5px;color:#9A958A;letter-spacing:.06em}
+.doc-h .t{font-family:var(--disp);font-weight:600;font-size:14.5px}
+.doc-b{padding:18px 20px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px}
+@media(max-width:620px){.grid2{grid-template-columns:1fr}}
+.f label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:5px;font-weight:500}
+.f input,.f select{width:100%;padding:9px 11px;font:inherit;font-size:14px;border:1px solid var(--line);border-radius:4px;background:#fff;color:var(--ink);transition:border-color .15s}
+.f input:focus,.f select:focus{border-color:var(--eu);outline:none;box-shadow:0 0 0 3px var(--eu-soft)}
+
+/* Szenario-Schalter */
+.sc-row{display:flex;gap:8px;flex-wrap:wrap}
+.sc{border:1px solid var(--line);background:#fff;border-radius:4px;padding:8px 14px;font-size:12.5px;color:var(--ink-soft);transition:all .15s}
+.sc[aria-pressed="true"]{border-color:var(--eu);background:var(--eu-soft);color:var(--eu);font-weight:600}
+.sc:hover{border-color:var(--eu)}
+
+/* Beitragszeile */
+.premium{display:flex;align-items:baseline;gap:14px;padding:16px 20px;border-top:1px dashed var(--line)}
+.premium .l{font-size:13px;color:var(--ink-soft)}
+.premium .v{margin-left:auto;font-family:var(--disp);font-weight:700;font-size:26px}
+.premium .v small{font-size:13px;font-weight:500;color:var(--ink-soft)}
+
+.cta{display:flex;justify-content:flex-end;margin-top:20px;gap:10px}
+.btn{border:none;border-radius:4px;padding:12px 22px;font-weight:600;font-size:14.5px;transition:transform .1s, background .15s}
+.btn:active{transform:translateY(1px)}
+.btn-eu{background:var(--eu);color:#fff}.btn-eu:hover{background:#0E2F6E}
+.btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink-soft)}.btn-ghost:hover{border-color:var(--ink-soft)}
+.btn-seal{background:var(--seal);color:#fff}.btn-seal:hover{background:#0A523C}
+
+/* ── Schritt 2: QR ── */
+.qr-wrap{display:grid;grid-template-columns:280px 1fr;gap:0}
+@media(max-width:680px){.qr-wrap{grid-template-columns:1fr}}
+.qr-left{padding:22px;border-right:1px solid var(--line-soft);display:flex;flex-direction:column;align-items:center;gap:12px}
+@media(max-width:680px){.qr-left{border-right:none;border-bottom:1px solid var(--line-soft)}}
+.qr-frame{background:#fff;border:1px solid var(--line);border-radius:6px;padding:14px}
+.qr-frame img{display:block;width:210px;height:210px;image-rendering:pixelated}
+.qr-hint{font-size:11.5px;color:var(--ink-soft);text-align:center;max-width:24ch}
+.sim-btn{width:100%;text-align:center;font-size:13px;padding:10px;border:1px solid var(--eu);border-radius:4px;background:var(--eu-soft);color:var(--eu);font-weight:600}
+.sim-btn:hover{background:#D9E4F6}
+.waiting{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-soft)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--eu);animation:pulse 1.2s ease infinite}
+@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+.attr{display:flex;gap:12px;padding:13px 0;border-bottom:1px solid var(--line-soft)}
+.attr:last-child{border-bottom:none}
+.attr .k{width:34px;height:34px;border-radius:4px;background:var(--eu-soft);color:var(--eu);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:500;flex-shrink:0}
+.attr .t{font-size:13.5px;font-weight:600}
+.attr .d{font-size:12px;color:var(--ink-soft)}
+.legal{font-size:11px;color:#9A958A;padding:12px 20px;border-top:1px dashed var(--line)}
+
+/* ── Schritt 3: Prüfprotokoll + Siegel ── */
+.cred{padding:16px 20px;border-bottom:1px solid var(--line-soft);display:grid;grid-template-columns:1fr 84px;gap:14px;align-items:center}
+.cred:last-child{border-bottom:none}
+.cred .name{font-weight:600;font-size:14px}
+.cred .tok{font-family:var(--mono);font-size:10.5px;color:#9A958A;word-break:break-all;margin-top:2px}
+.micro{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
+.mc{font-family:var(--mono);font-size:10.5px;color:#B4AFA3;transition:color .2s}
+.mc.ok{color:var(--seal)}
+.mc.ok::before{content:"✓ "}
+.mc.fail{color:var(--warn)}.mc.fail::before{content:"✕ "}
+/* Prüfsiegel */
+.seal{width:74px;height:74px;position:relative;justify-self:end;opacity:0;transform:scale(1.5) rotate(-14deg)}
+.seal.stamp{animation:stamp .38s cubic-bezier(.2,1.4,.4,1) forwards}
+@keyframes stamp{to{opacity:1;transform:scale(1) rotate(-8deg)}}
+.seal svg{width:100%;height:100%}
+.seal.bad circle{stroke:var(--warn)} .seal.bad text{fill:var(--warn)} .seal.bad path{stroke:var(--warn)}
+/* Business-Checks */
+.biz{display:flex;gap:12px;padding:14px 20px;align-items:center;border-bottom:1px solid var(--line-soft)}
+.biz:last-child{border-bottom:none}
+.biz .st{font-family:var(--mono);font-size:12px;width:60px;color:#B4AFA3}
+.biz .st.ok{color:var(--seal)} .biz .st.fail{color:var(--warn)}
+.biz .lbl{font-size:14px}
+.biz .src{margin-left:auto;font-size:11px;color:#9A958A}
+
+/* ── Schritt 4: Police ── */
+.policy{position:relative;overflow:hidden}
+.policy .doc-b{padding:24px 26px}
+.p-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px}
+.p-title{font-family:var(--disp);font-weight:700;font-size:20px}
+.p-no{font-family:var(--mono);font-size:12px;color:var(--ink-soft)}
+.p-verified{border:1.5px solid var(--seal);color:var(--seal);border-radius:4px;padding:6px 10px;font-size:11px;font-weight:600;transform:rotate(-3deg);background:var(--seal-soft)}
+.p-row{display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:13.5px}
+.p-row:last-child{border-bottom:none}
+.p-row .k{color:var(--ink-soft)}
+.p-row .v{font-weight:600;text-align:right}
+.p-row .v.mono{font-family:var(--mono);font-weight:500;font-size:12.5px}
+.goldline{height:3px;background:linear-gradient(90deg,var(--gold),transparent);margin:16px 0}
+
+/* Fehler / Ablehnung */
+.notice{border-left:3px solid var(--warn);background:var(--warn-soft);padding:14px 18px;border-radius:0 4px 4px 0;font-size:13.5px;margin-bottom:18px}
+.notice.blue{border-color:var(--eu);background:var(--eu-soft)}
+.backend-warn{display:none;border-left:3px solid var(--warn);background:var(--warn-soft);padding:12px 16px;font-size:12.5px;margin-bottom:16px;border-radius:0 4px 4px 0}
+footer{border-top:1px solid var(--line);margin-top:40px}
+.foot-in{max-width:860px;margin:0 auto;padding:16px 24px;font-size:11px;color:#9A958A;display:flex;gap:14px}
+.foot-in .m{font-family:var(--mono)}
+</style>
+</head>
+<body>
+<header>
+  <div class="head-in">
+    <div class="wordmark">OEV <span>·</span> Kfz-Digitalantrag</div>
+    <div class="head-meta">EUDI-POC · OpenID4VP · SD-JWT</div>
+  </div>
+</header>
+
+<nav class="ledger" aria-label="Antragsschritte">
+  <div class="lstep on" data-l="1"><span class="n">01</span> Fahrzeug</div>
+  <div class="lstep" data-l="2"><span class="n">02</span> Identität</div>
+  <div class="lstep" data-l="3"><span class="n">03</span> Prüfung</div>
+  <div class="lstep" data-l="4"><span class="n">04</span> Police</div>
+</nav>
+
+<main>
+<div class="backend-warn" id="bwarn">Backend nicht erreichbar. Terminal: <b>node server_v4.js</b> im Ordner backend starten, dann Seite neu laden.</div>
+
+<!-- ═ Schritt 1 ═ -->
+<section class="stage on" id="s1">
+  <h1>Kfz-Versicherung beantragen</h1>
+  <p class="sub">Fahrzeugdaten angeben — die Identitätsprüfung übernimmt anschließend Ihre EUDI-Wallet. Keine Ausweiskopie, kein Warten.</p>
+
+  <div class="doc">
+    <div class="doc-h"><span class="tag">DEMO</span><span class="t">Szenario wählen</span></div>
+    <div class="doc-b">
+      <div class="sc-row" role="group" aria-label="Demo-Szenario">
+        <button class="sc" aria-pressed="true"  data-sc="success">Alle Nachweise vorhanden</button>
+        <button class="sc" aria-pressed="false" data-sc="no_license">Kein Führerschein</button>
+        <button class="sc" aria-pressed="false" data-sc="underage">Minderjährig</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="doc">
+    <div class="doc-h"><span class="tag">A</span><span class="t">Fahrzeug</span></div>
+    <div class="doc-b grid2">
+      <div class="f"><label for="plate">Amtliches Kennzeichen</label><input id="plate" value="B-XY 1234"></div>
+      <div class="f"><label for="make">Hersteller</label><input id="make" value="Volkswagen"></div>
+      <div class="f"><label for="model">Modell</label><input id="model" value="Golf 8"></div>
+      <div class="f"><label for="km">Jährliche Fahrleistung</label>
+        <select id="km"><option>bis 10.000 km</option><option selected>bis 15.000 km</option><option>bis 20.000 km</option></select></div>
+    </div>
+  </div>
+
+  <div class="doc">
+    <div class="doc-h"><span class="tag">B</span><span class="t">Versicherungsschutz</span></div>
+    <div class="doc-b grid2">
+      <div class="f"><label for="cov">Deckungsart</label>
+        <select id="cov"><option>Haftpflicht</option><option selected>Teilkasko</option><option>Vollkasko</option></select></div>
+      <div class="f"><label for="sb">Selbstbeteiligung</label>
+        <select id="sb"><option>150 €</option><option selected>300 €</option><option>500 €</option></select></div>
+    </div>
+    <div class="premium"><span class="l">Voraussichtlicher Jahresbeitrag</span><span class="v">348 <small>€ / Jahr</small></span></div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:14px">
+      <input type="checkbox" id="walletOptIn">
+      Police als Karte in Apple/Google Wallet ablegen und über Neuigkeiten dazu benachrichtigt werden
+    </label>
+  </div>
+
+  <div class="cta"><button class="btn btn-eu" id="startBtn">Mit EUDI-Wallet fortfahren</button></div>
+</section>
+
+<!-- ═ Schritt 2 ═ -->
+<section class="stage" id="s2">
+  <h1>Identität über die EUDI-Wallet</h1>
+  <p class="sub">Scannen Sie den Code mit Ihrer EUDI-Wallet-App — oder öffnen Sie für diese Demo den Wallet-Simulator.</p>
+  <div class="doc">
+    <div class="qr-wrap">
+      <div class="qr-left">
+        <div class="qr-frame"><img id="qrImg" alt="QR-Code für die EUDI-Wallet"></div>
+        <div class="qr-hint">Enthält den signierten OpenID4VP-Request dieses Vorgangs</div>
+        <button class="sim-btn" id="simBtn">Wallet-Simulator öffnen</button>
+        <div class="waiting"><span class="dot"></span><span id="waitMsg">Warte auf Antwort der Wallet …</span></div>
+      </div>
+      <div>
+        <div class="doc-h"><span class="tag">ANFRAGE</span><span class="t">Diese Nachweise werden angefragt</span></div>
+        <div class="doc-b">
+          <div class="attr"><div class="k">PID</div><div><div class="t">Personalausweis</div><div class="d">Nur das Merkmal „Alter ≥ 18“ — nicht das Geburtsdatum</div></div></div>
+          <div class="attr"><div class="k">mDL</div><div><div class="t">Führerschein</div><div class="d">Fahrerlaubnisklassen und Gültigkeit</div></div></div>
+          <div class="attr"><div class="k">EAA</div><div><div class="t">Bankverbindung</div><div class="d">Bestätigte IBAN für den Beitragseinzug</div></div></div>
+        </div>
+        <div class="legal">Selektive Offenbarung nach eIDAS 2.0 — es werden ausschließlich die oben genannten Merkmale übertragen, kryptographisch signiert durch die ausstellenden Stellen.</div>
+      </div>
+    </div>
+  </div>
+  <div class="cta"><button class="btn btn-ghost" id="cancelBtn">Vorgang abbrechen</button></div>
+</section>
+
+<!-- ═ Schritt 3 ═ -->
+<section class="stage" id="s3">
+  <h1>Kryptographische Prüfung</h1>
+  <p class="sub">Jeder Nachweis wird einzeln verifiziert: Aussteller-Signatur, Offenlegungs-Hashes, Vorgangs-Nonce und Schlüsselbindung.</p>
+  <div class="doc">
+    <div class="doc-h"><span class="tag">SD-JWT</span><span class="t">Nachweis-Verifikation</span></div>
+    <div id="credList"></div>
+  </div>
+  <div class="doc" style="margin-top:16px">
+    <div class="doc-h"><span class="tag">FACHLICH</span><span class="t">Antragsprüfung</span></div>
+    <div id="bizList">
+      <div class="biz" data-b="ageOver18"><span class="st">·····</span><span class="lbl">Volljährigkeit</span><span class="src">PID</span></div>
+      <div class="biz" data-b="driversLicense"><span class="st">·····</span><span class="lbl">Fahrerlaubnis Klasse B</span><span class="src">mDL</span></div>
+      <div class="biz" data-b="ibanValid"><span class="st">·····</span><span class="lbl">Bestätigte Bankverbindung</span><span class="src">EAA</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═ Schritt 4: Police ═ -->
+<section class="stage" id="s4">
+  <h1>Ihr Versicherungsschein</h1>
+  <p class="sub">Alle Nachweise wurden kryptographisch verifiziert. Der Schutz gilt ab sofort.</p>
+  <div class="doc policy">
+    <div class="doc-b">
+      <div class="p-head">
+        <div><div class="p-title">Kfz-Versicherungsschein</div><div class="p-no" id="pNo">—</div></div>
+        <div class="p-verified">EUDI-verifiziert</div>
+      </div>
+      <div id="pRows"></div>
+      <div class="goldline"></div>
+      <div style="font-size:11.5px;color:#9A958A">Vorläufige Deckungszusage zu Demonstrationszwecken. Die Identitätsmerkmale wurden per SD-JWT-Nachweis mit Schlüsselbindung geprüft.</div>
+    </div>
+  </div>
+  <div class="cta" id="walletPassCta"></div>
+  <div class="cta"><button class="btn btn-eu" id="againBtn">Neuen Vorgang starten</button></div>
+</section>
+
+<!-- ═ Fehlschlag ═ -->
+<section class="stage" id="s5">
+  <h1>Antrag kann nicht angenommen werden</h1>
+  <p class="sub">Die Nachweise waren echt und unverfälscht — aber mindestens eine fachliche Voraussetzung ist nicht erfüllt.</p>
+  <div class="notice" id="failWhy">—</div>
+  <div class="doc"><div id="failList"></div></div>
+  <div class="cta"><button class="btn btn-eu" id="againBtn2">Neuen Vorgang starten</button></div>
+</section>
+
+<!-- ═ Abgelehnt ═ -->
+<section class="stage" id="s6">
+  <h1>Freigabe abgelehnt</h1>
+  <p class="sub">Sie haben die Übermittlung Ihrer Nachweise in der Wallet abgelehnt. Es wurden keine Daten übertragen.</p>
+  <div class="notice blue">Ihre Entscheidung: Ohne Freigabe verlässt kein einziges Merkmal Ihre Wallet — das ist der Kern von eIDAS 2.0.</div>
+  <div class="cta"><button class="btn btn-eu" id="againBtn3">Neuen Vorgang starten</button></div>
+</section>
+</main>
+
+<footer><div class="foot-in"><span>OEV Masterprojekt · EUDI Wallet POC</span><span class="m" id="footMode">—</span></div></footer>
+
+<script>
+const API=''; // gleiche Origin (server_v4 liefert diese Seite aus)
+let sessionId=null, poll=null, scenario='success', simWin=null;
+
+const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+function go(stage, ledger){
+  $$('.stage').forEach(x=>x.classList.remove('on'));
+  $('#'+stage).classList.add('on');
+  $$('.lstep').forEach(l=>{const n=+l.dataset.l;l.classList.toggle('on',n===ledger);l.classList.toggle('done',n<ledger)});
+  window.scrollTo({top:0});
+}
+
+/* Szenario */
+$$('.sc').forEach(b=>b.addEventListener('click',()=>{
+  $$('.sc').forEach(x=>x.setAttribute('aria-pressed','false'));
+  b.setAttribute('aria-pressed','true'); scenario=b.dataset.sc;
+}));
+
+/* Health-Check */
+fetch(API+'/api/health').then(r=>r.json()).then(h=>{$('#footMode').textContent=h.mode+' · '+h.crypto}).catch(()=>{$('#bwarn').style.display='block'});
+
+/* Schritt 1 → 2 */
+$('#startBtn').addEventListener('click', async ()=>{
+  const vehicleData={plate:$('#plate').value,make:$('#make').value,model:$('#model').value,km:$('#km').value,coverage:$('#cov').value,sb:$('#sb').value};
+  const walletOptIn=$('#walletOptIn').checked;
+  try{
+    const r=await fetch(API+'/api/wallet/start-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vehicleData,scenario,walletOptIn})});
+    const d=await r.json();
+    sessionId=d.sessionId;
+    $('#qrImg').src=d.qrCodeDataUrl;
+    go('s2',2); startPoll();
+  }catch{ $('#bwarn').style.display='block'; }
+});
+
+$('#simBtn').addEventListener('click',()=>{
+  simWin=window.open(`${API}/wallet-simulator.html?session=${sessionId}&scenario=${scenario}`,'eudi-sim','width=420,height=740,top=80,left=900');
+});
+$('#cancelBtn').addEventListener('click',()=>{stopPoll();go('s1',1)});
+['againBtn','againBtn2','againBtn3'].forEach(id=>$('#'+id).addEventListener('click',()=>{stopPoll();sessionId=null;go('s1',1)}));
+
+/* Polling */
+function startPoll(){
+  let n=0;
+  poll=setInterval(async ()=>{
+    if(++n>90) return stopPoll();
+    try{
+      const d=await (await fetch(`${API}/api/wallet/status/${sessionId}`)).json();
+      if(d.status==='pending') return;
+      stopPoll();
+      if(d.status==='rejected') return go('s6',2);
+      renderVerification(d);
+    }catch{}
+  },1500);
+}
+function stopPoll(){ if(poll){clearInterval(poll);poll=null} }
+
+/* Schritt 3: Prüfprotokoll animieren */
+const CRED_NAMES={pid:'Personalausweis (PID)',mdl:'Führerschein (mDL)',iban:'Bankverbindung (EAA)'};
+function sealSvg(ok){
+  return `<svg viewBox="0 0 74 74" aria-hidden="true">
+    <circle cx="37" cy="37" r="33" fill="none" stroke="${ok?'#0E6B4F':'#8A2F23'}" stroke-width="2.5"/>
+    <circle cx="37" cy="37" r="27" fill="none" stroke="${ok?'#0E6B4F':'#8A2F23'}" stroke-width="1" stroke-dasharray="2 3"/>
+    ${ok?'<path d="M25 38 l8 8 l16 -17" fill="none" stroke="#0E6B4F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'
+        :'<path d="M27 27 l20 20 M47 27 l-20 20" fill="none" stroke="#8A2F23" stroke-width="3" stroke-linecap="round"/>'}
+    <text x="37" y="66" text-anchor="middle" font-family="Spline Sans Mono" font-size="7" fill="${ok?'#0E6B4F':'#8A2F23'}">${ok?'GEPRÜFT':'ABGELEHNT'}</text>
+  </svg>`;
+}
+async function renderVerification(result){
+  go('s3',3);
+  const list=$('#credList'); list.innerHTML='';
+  const log=result.verificationLog||[];
+  // Reihen aufbauen
+  log.forEach(v=>{
+    const div=document.createElement('div'); div.className='cred';
+    div.innerHTML=`<div>
+        <div class="name">${CRED_NAMES[v.credType]||v.credType}</div>
+        <div class="tok">${(v.tokenPreview||'sd-jwt')}…</div>
+        <div class="micro">
+          <span class="mc" data-m="sig">Signatur</span>
+          <span class="mc" data-m="dis">Hashes</span>
+          <span class="mc" data-m="non">Nonce</span>
+          <span class="mc" data-m="kb">Bindung</span>
+        </div></div>
+      <div class="seal">${sealSvg(v.verified)}</div>`;
+    list.appendChild(div);
+  });
+  // Sequenz: Mikro-Checks → Siegel
+  const rows=[...list.children];
+  for(const [i,row] of rows.entries()){
+    const ok=log[i].verified;
+    for(const m of row.querySelectorAll('.mc')){
+      await wait(260);
+      m.classList.add(ok?'ok':'fail');
+    }
+    await wait(160);
+    const seal=row.querySelector('.seal'); if(seal){ if(!ok) seal.classList.add('bad'); seal.classList.add('stamp'); }
+    await wait(220);
+  }
+  // Fachliche Checks
+  await wait(300);
+  for(const el of $$('#bizList .biz')){
+    const key=el.dataset.b, c=result.checks?.[key];
+    if(!c){ el.style.display='none'; continue; }
+    await wait(340);
+    const st=el.querySelector('.st');
+    st.textContent=c.passed?'ERFÜLLT':'FEHLT';
+    st.classList.add(c.passed?'ok':'fail');
+  }
+  await wait(650);
+  if(result.status==='success') renderPolicy(result.policy);
+  else renderFailure(result);
+}
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* Schritt 4 */
+function renderPolicy(p){
+  $('#pNo').textContent='Vorgangs-Nr. '+(p?.policyNumber||'—');
+  const v=p?.vehicle||{};
+  $('#pRows').innerHTML=[
+    ['Versicherungsnehmer',p?.holder||'—'],
+    ['Fahrzeug',`${v.make||''} ${v.model||''}`.trim()+' · '+(v.plate||'')],
+    ['Deckung',(p?.coverage||'Teilkasko')+' · SB '+(v.sb||'300 €')],
+    ['Jahresbeitrag',(p?.annualPremium||348)+' €'],
+    ['Beitragseinzug',`<span class="mono">${p?.paymentMethod||'—'}</span>`],
+    ['Beginn des Schutzes',p?.validFrom||'sofort'],
+  ].map(([k,val])=>`<div class="p-row"><span class="k">${k}</span><span class="v">${val}</span></div>`).join('');
+  const wp=p?.walletPass;
+  $('#walletPassCta').innerHTML = wp
+    ? `<a class="btn btn-ghost" href="${wp.downloadPage}" target="_blank" rel="noopener">Police in Apple/Google Wallet öffnen</a>`
+    : '';
+  go('s4',4);
+}
+function renderFailure(result){
+  const failed=Object.entries(result.checks||{}).filter(([,c])=>!c.passed);
+  $('#failWhy').textContent='Nicht erfüllt: '+failed.map(([,c])=>c.label).join(' · ');
+  $('#failList').innerHTML=Object.entries(result.checks||{}).map(([,c])=>
+    `<div class="biz"><span class="st ${c.passed?'ok':'fail'}">${c.passed?'ERFÜLLT':'FEHLT'}</span><span class="lbl">${c.label}</span><span class="src">${c.source}</span></div>`).join('');
+  go('s5',4);
+}
+</script>
+</body>
+</html>

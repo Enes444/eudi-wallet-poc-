@@ -1,0 +1,14 @@
+{
+  "name": "eudi-wallet-poc-backend",
+  "version": "4.0.0",
+  "description": "EUDI Wallet POC – OpenID4VP + SD-JWT mit echter Kryptographie",
+  "main": "server_v4.js",
+  "scripts": {
+    "setup": "node test-wallet.js setup",
+    "start": "node server_v4.js",
+    "start:demo": "node server.js",
+    "test": "node e2e-test.js"
+  },
+  "dependencies": { "jose": "^5.9.6", "qrcode": "^1.5.4" },
+  "engines": { "node": ">=18" }
+}
