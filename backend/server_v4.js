@@ -33,9 +33,25 @@ const sessions = new Map();
 setInterval(() => { const n = Date.now(); for (const [id,s] of sessions) if (s.expires < n) sessions.delete(id); }, 300000);
 
 // ── Schlüssel: RP (signiert Requests) + Issuer-Vertrauensanker ────────────────
-let rpKeys, issuerPublicKey, issuerPublicJwk;
+// Registrierter RP-Key (echtes Zertifikat) hat Vorrang vor dem selbstsignierten Test-Key.
+// Pfade über Env-Variablen konfigurierbar, Default: ~/Desktop/eudi-rp-cert/
+const RP_KEY_DIR = process.env.RP_KEY_DIR || path.join(require('os').homedir(), 'Desktop', 'eudi-rp-cert');
+const RP_PRIVATE_KEY_FILE = process.env.RP_PRIVATE_KEY_FILE || path.join(RP_KEY_DIR, 'key_private.pem');
+const RP_CERT_FILE = process.env.RP_CERT_FILE || path.join(RP_KEY_DIR, 'certificate-b23bf4273a1e1d03df191d02e0d783a8.crt');
+
+let rpPrivateKey, rpPublicKey, rpCertDer, issuerPublicKey, issuerPublicJwk;
 async function initKeys() {
-  rpKeys = await jose.generateKeyPair('ES256');
+  if (fs.existsSync(RP_PRIVATE_KEY_FILE) && fs.existsSync(RP_CERT_FILE)) {
+    rpPrivateKey = crypto.createPrivateKey(fs.readFileSync(RP_PRIVATE_KEY_FILE, 'utf8'));
+    rpPublicKey = crypto.createPublicKey(rpPrivateKey);
+    rpCertDer = fs.readFileSync(RP_CERT_FILE, 'utf8')
+      .replace(/-----(BEGIN|END) CERTIFICATE-----/g, '').replace(/\s+/g, '');
+    console.log('✅ Registriertes RP-Zertifikat geladen — Requests werden mit echtem Zertifikat signiert');
+  } else {
+    const kp = await jose.generateKeyPair('ES256');
+    rpPrivateKey = kp.privateKey; rpPublicKey = kp.publicKey; rpCertDer = null;
+    console.log('⚠️  Kein RP-Zertifikat gefunden — selbstsignierter Test-Key (nur für Browser-Simulator, echte Wallets lehnen ihn ab)');
+  }
   // Issuer-Public-Key aus Datei (wird vom Test-Wallet / Issuer-Setup erzeugt)
   const trustFile = path.join(__dirname, 'trust-registry.json');
   if (fs.existsSync(trustFile)) {
@@ -122,11 +138,13 @@ const server = http.createServer(async (req, res) => {
     const id = pathname.split('/').pop();
     const s = sessions.get(id);
     if (!s) return json(res, 404, { error:'Session nicht gefunden' });
+    const header = { alg:'ES256', typ:'oauth-authz-req+jwt' };
+    if (rpCertDer) header.x5c = [rpCertDer];
     const requestObject = await new jose.SignJWT({
       response_type:'vp_token', response_mode:'direct_post',
       client_id: CLIENT_ID, response_uri: `${PUBLIC_URL}/api/wallet/callback`,
       nonce: s.nonce, state: id, presentation_definition: PRESENTATION_DEFINITION,
-    }).setProtectedHeader({ alg:'ES256', typ:'oauth-authz-req+jwt' }).setIssuedAt().setExpirationTime('10m').sign(rpKeys.privateKey);
+    }).setProtectedHeader(header).setIssuedAt().setExpirationTime('10m').sign(rpPrivateKey);
     setCors(res); res.writeHead(200, {'Content-Type':'application/oauth-authz-req+jwt'});
     console.log(`[REQUEST] Signiertes Request Object für ${id} ausgeliefert`);
     return res.end(requestObject);
@@ -134,7 +152,7 @@ const server = http.createServer(async (req, res) => {
 
   // GET /api/rp-jwks — Public Key der RP (damit Wallet die Signatur prüfen kann)
   if (req.method === 'GET' && pathname === '/api/rp-jwks') {
-    const jwk = await jose.exportJWK(rpKeys.publicKey);
+    const jwk = await jose.exportJWK(rpPublicKey);
     return json(res, 200, { keys: [ { ...jwk, alg:'ES256', use:'sig' } ] });
   }
 
