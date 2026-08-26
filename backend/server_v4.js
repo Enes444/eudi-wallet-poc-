@@ -173,13 +173,14 @@ const server = http.createServer(async (req, res) => {
         jwks: { keys: [s.encPubJwk] },
         vp_formats: VP_FORMATS, vp_formats_supported: VP_FORMATS,
         authorization_encrypted_response_alg:'ECDH-ES', authorization_encrypted_response_enc:'A128GCM',
+        encrypted_response_enc_values_supported:['A128GCM'],
       },
     } : {};
     const requestObject = await new jose.SignJWT({
       response_type:'vp_token', response_mode: useDcql ? 'direct_post.jwt' : 'direct_post',
       client_id: CLIENT_ID, response_uri: `${PUBLIC_URL}/api/wallet/callback`,
       nonce: s.nonce, state: id, ...query, ...extra,
-    }).setProtectedHeader(header).setIssuedAt().setExpirationTime('10m').sign(rpPrivateKey);
+    }).setProtectedHeader(header).setIssuer(CLIENT_ID).setIssuedAt().setExpirationTime('10m').sign(rpPrivateKey);
     if (useDcql) console.log(`[REQUEST] DCQL-Modus (echte Wallet) für ${id}`);
     setCors(res); res.writeHead(200, {'Content-Type':'application/oauth-authz-req+jwt'});
     console.log(`[REQUEST] Signiertes Request Object für ${id} ausgeliefert`);
