@@ -175,7 +175,12 @@ footer{border-top:1px solid var(--line);margin-top:40px}
     <div class="doc-b">
       <div class="sc-row" role="group" aria-label="Demo-Szenario">
         <button class="sc" aria-pressed="true"  data-sc="success">Alle Nachweise vorhanden</button>
-        <button class="sc" aria-pressed="false" data-sc="no_license">Kein Führerschein</button>
+        <button class="sc" aria-pressed="false" data-sc="no_license">Kein Führerschein / IBAN</button>
+      </div>
+      <div class="notice blue" style="margin-top:12px;margin-bottom:0">
+        Gilt für beides: den Browser-Wallet-Simulator UND einen Scan mit einer echten EUDI-Wallet
+        (dort werden Führerschein/IBAN ohnehin nie ausgestellt — bei "Kein Führerschein / IBAN"
+        erscheinen sie dann ehrlich als fehlend, statt automatisch übersprungen zu werden).
       </div>
     </div>
   </div>
@@ -203,13 +208,6 @@ footer{border-top:1px solid var(--line);margin-top:40px}
     <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:14px">
       <input type="checkbox" id="walletOptIn">
       Police als Karte in Apple/Google Wallet ablegen und über Neuigkeiten dazu benachrichtigt werden
-    </label>
-    <div class="notice blue" style="margin-top:12px;margin-bottom:0">
-      Hinweis: Beim Scan mit einer echten EUDI-Wallet wird automatisch nur der Altersnachweis geprüft.
-    </div>
-    <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:14px">
-      <input type="checkbox" id="realStrict">
-      Echter Test: kein Führerschein und keine IBAN vorhanden (bei Scan mit echter Wallet ehrlich als fehlend anzeigen)
     </label>
   </div>
 
@@ -324,12 +322,13 @@ fetch(API+'/api/health').then(r=>r.json()).then(h=>{$('#footMode').textContent=h
 $('#startBtn').addEventListener('click', async ()=>{
   const vehicleData={plate:$('#plate').value,make:$('#make').value,model:$('#model').value,km:$('#km').value,coverage:$('#cov').value,sb:$('#sb').value};
   const walletOptIn=$('#walletOptIn').checked;
-  const realStrict=$('#realStrict').checked;
+  // realStrict folgt direkt aus dem gewählten Szenario: bei "Kein Führerschein / IBAN" werden diese
+  // Checks auch beim Scan mit einer echten Wallet ehrlich als FEHLT geprüft (statt wie sonst
+  // automatisch ausgeblendet — siehe server_v4.js).
+  const realStrict=scenario==='no_license';
   try{
     // pidOnly explizit false: Browser-Demo prüft immer alle 3 Nachweise, unabhängig von einer
     // eventuell serverseitig für Telefon-Tests gesetzten PID_ONLY-Env-Variable (siehe server_v4.js).
-    // realStrict: nur bei explizitem Wunsch werden Führerschein/IBAN auch beim Scan mit einer echten
-    // Wallet ehrlich als FEHLT geprüft (statt wie sonst automatisch ausgeblendet).
     const r=await fetch(API+'/api/wallet/start-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vehicleData,scenario,walletOptIn,pidOnly:false,realStrict})});
     const d=await r.json();
     sessionId=d.sessionId;
