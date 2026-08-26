@@ -106,13 +106,14 @@ const PID_CLAIMS = [ { path:['age_equal_or_over','18'] }, { path:['given_name'] 
 // Zwei Format-Varianten als Alternative (credential_sets = ODER):
 // 'dc+sd-jwt' versteht die offizielle Sandbox-Wallet, 'vc+sd-jwt' (älterer Media-Type,
 // laut docs.wallet.lissi.id/home/technical-specifications SD-JWT VC Draft 11) die Lissi-Wallet.
-const DCQL_PID = {
-  credentials: [
-    { id:'pid_dcsdjwt', format:'dc+sd-jwt', meta:{ vct_values: PID_VCTS }, claims: PID_CLAIMS },
-    { id:'pid_vcsdjwt', format:'vc+sd-jwt', meta:{ vct_values: PID_VCTS }, claims: PID_CLAIMS },
-  ],
-  credential_sets: [ { options: [ ['pid_dcsdjwt'], ['pid_vcsdjwt'] ] } ],
-};
+// credential_sets (ODER-Logik) wird nicht von allen Wallets unterstützt — Lissi und die
+// Sandbox-Wallet haben beide credentials-Einträge als PFLICHT behandelt statt als Alternative
+// (zwei "kein Nachweis"-Dialoge). Deshalb: nur EIN Format pro Anfrage, per User-Agent gewählt.
+const DCQL_PID_DCSDJWT = { credentials: [ { id:'pid', format:'dc+sd-jwt', meta:{ vct_values: PID_VCTS }, claims: PID_CLAIMS } ] };
+const DCQL_PID_VCSDJWT = { credentials: [ { id:'pid', format:'vc+sd-jwt', meta:{ vct_values: PID_VCTS }, claims: PID_CLAIMS } ] };
+function pickDcqlQuery(userAgent) {
+  return /lissi/i.test(userAgent || '') ? DCQL_PID_VCSDJWT : DCQL_PID_DCSDJWT;
+}
 const VP_FORMATS = { 'dc+sd-jwt': { 'sd-jwt_alg_values':['ES256'], 'kb-jwt_alg_values':['ES256'] },
                      'vc+sd-jwt': { 'sd-jwt_alg_values':['ES256'], 'kb-jwt_alg_values':['ES256'] } };
 
@@ -195,7 +196,7 @@ const server = http.createServer(async (req, res) => {
     const header = { alg:'ES256', typ:'oauth-authz-req+jwt' };
     if (rpCertDer) header.x5c = [rpCertDer];
     const useDcql = !!rpCertDer; // Zertifikat vorhanden ⇒ Abnehmer ist eine echte Wallet ⇒ immer DCQL (Häkchen-/Cache-sicher)
-    const query = useDcql ? { dcql_query: DCQL_PID } : { presentation_definition: buildPresentationDefinition(s.pidOnly) };
+    const query = useDcql ? { dcql_query: pickDcqlQuery(req.headers['user-agent']) } : { presentation_definition: buildPresentationDefinition(s.pidOnly) };
     const extra = useDcql ? {
       aud: 'https://self-issued.me/v2',
       client_metadata: {
@@ -209,7 +210,7 @@ const server = http.createServer(async (req, res) => {
       client_id: CLIENT_ID, response_uri: `${PUBLIC_URL}/api/wallet/callback`,
       nonce: s.nonce, state: id, ...query, ...extra,
     }).setProtectedHeader(header).setIssuedAt().setExpirationTime('10m').sign(rpPrivateKey);
-    if (useDcql) console.log(`[REQUEST] DCQL-Modus (echte Wallet) für ${id}`);
+    if (useDcql) console.log(`[REQUEST] DCQL-Modus (echte Wallet) für ${id} — User-Agent: ${req.headers['user-agent']||'?'} — Format: ${query.dcql_query.credentials[0].format}`);
     setCors(res); res.writeHead(200, {'Content-Type':'application/oauth-authz-req+jwt'});
     console.log(`[REQUEST] Signiertes Request Object für ${id} ausgeliefert`);
     return res.end(requestObject);
