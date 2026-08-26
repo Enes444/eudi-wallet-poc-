@@ -338,8 +338,12 @@ const server = http.createServer(async (req, res) => {
           console.log(`[PASSCREATOR] Fehler: ${e.message}`);
         }
       }
-      return json(res, 200, { status: ok?'success':'failed', checks, policy, verificationLog: s.verificationLog });
+      s.result = { status: ok?'success':'failed', checks, policy, verificationLog: s.verificationLog };
+      return json(res, 200, s.result);
     }
+    // Wiederholte Abfrage nach bereits erfolgter Auswertung (z.B. überlappender Poll-Tick,
+    // Retry, zweiter Tab) — gecachtes Ergebnis statt eines leeren { status:'verified' } liefern.
+    if (s.status === 'verified' && s.result) return json(res, 200, s.result);
     return json(res, 200, { status:s.status });
   }
 
