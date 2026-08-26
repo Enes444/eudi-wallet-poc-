@@ -101,6 +101,26 @@ immer, egal welches Szenario gewählt wird.
 
 ---
 
+## Offene Punkte / TODO
+
+**Key-Binding-JWT bei echten Wallet-Tokens (x5c) wird nicht streng geprüft.**
+In `sdjwt.js` (`verifyPresentation`) wird bei x5c-vertrauten (echten) Tokens ein
+fehlgeschlagenes Key-Binding aktuell NICHT hart abgelehnt, sondern nur
+protokolliert (`kbVerified:false`, `kbError:"…"`). Grund: die genaue Ursache
+für gelegentliche Fehlschläge (z.B. `aud`- oder `sd_hash`-Mismatch bei
+bestimmten Wallets) ist noch nicht bestätigt — anders als beim bereits
+behobenen `age_equal_or_over.18`-Disclosure-Bug (siehe Git-Historie), wo die
+Ursache durch einen synthetischen Test nachgewiesen werden konnte.
+
+Seit dem Fix in `server_v4.js`/`sdjwt.js` (Commit `55cca32`) wird der reale
+Status jetzt ehrlich geloggt (`[VERIFY] pid: … KeyBinding ✓` oder
+`✕ übersprungen (<Grund>)`) und im Frontend angezeigt (Mikro-Check "Bindung").
+→ Nächster Schritt: bei echtem Wallet-Scan die Server-Logs prüfen — falls dort
+ein konkreter `kbError` auftaucht, genauso wie beim Disclosure-Bug die Ursache
+finden und die Prüfung wieder streng machen (statt zu tolerieren).
+
+---
+
 ## Was ändert sich in der Demo wenn es echt ist?
 
 - QR-Code ist echt scanbar (statt visueller Mock)
