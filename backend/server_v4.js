@@ -142,7 +142,7 @@ const server = http.createServer(async (req, res) => {
     const nonce = crypto.randomBytes(16).toString('hex');
     const pidOnly = body.pidOnly !== undefined ? !!body.pidOnly : PID_ONLY;
     let encKey = null, encPubJwk = null;
-    if (pidOnly) { // echte Wallet: verschlüsselte Antwort (direct_post.jwt, ECDH-ES)
+    if (pidOnly || rpCertDer) { // echte Wallet: verschlüsselte Antwort (direct_post.jwt, ECDH-ES)
       const eph = await jose.generateKeyPair('ECDH-ES', { crv:'P-256', extractable:true });
       encKey = eph.privateKey;
       encPubJwk = { ...(await jose.exportJWK(eph.publicKey)), use:'enc', alg:'ECDH-ES', kid:'enc-'+sessionId.slice(0,8) };
@@ -165,7 +165,7 @@ const server = http.createServer(async (req, res) => {
     if (!s) return json(res, 404, { error:'Session nicht gefunden' });
     const header = { alg:'ES256', typ:'oauth-authz-req+jwt' };
     if (rpCertDer) header.x5c = [rpCertDer];
-    const useDcql = s.pidOnly && !!rpCertDer; // echte Sandbox-Wallet: DCQL + x509_hash + verschlüsselte Antwort
+    const useDcql = !!rpCertDer; // Zertifikat vorhanden ⇒ Abnehmer ist eine echte Wallet ⇒ immer DCQL (Häkchen-/Cache-sicher)
     const query = useDcql ? { dcql_query: DCQL_PID } : { presentation_definition: buildPresentationDefinition(s.pidOnly) };
     const extra = useDcql ? {
       aud: 'https://self-issued.me/v2',
@@ -225,6 +225,7 @@ const server = http.createServer(async (req, res) => {
       if (typeof vt === 'string') tokens = { pid: vt };
       else if (Array.isArray(vt)) tokens = { pid: vt[0] };
       else if (vt && typeof vt === 'object') tokens = vt;
+      const sAuto = sessions.get(state); if (sAuto) sAuto.pidOnly = true; // echte Wallet liefert nur PID ⇒ Checks entsprechend
       console.log(`[CALLBACK] Echte Wallet-Antwort empfangen (${req.headers['content-type']||'?'})`);
     }
     if (tokens) for (const k of Object.keys(tokens)) if (Array.isArray(tokens[k])) tokens[k] = tokens[k][0];
