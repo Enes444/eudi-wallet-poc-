@@ -2,10 +2,10 @@
  * Passcreator-Anbindung: erzeugt eine Apple/Google-Wallet-Karte zur Police.
  * https://developer.passcreator.com/en/api/v3/pass
  */
-const FIELD_KENNZEICHEN = '6a2a6a80adb7a7.95340218';
-const FIELD_VERSICHERUNGSNR = '6a2a6a80adb860.94634519';
-const FIELD_VORNAME = '6a2a6a80adb899.11243033';
-const FIELD_NACHNAME = '6a2a6a80adb8b4.30308411';
+const FIELD_KENNZEICHEN = process.env.PASSCREATOR_FIELD_KENNZEICHEN || '6a2a6a80adb7a7.95340218';
+const FIELD_VERSICHERUNGSNR = process.env.PASSCREATOR_FIELD_VERSICHERUNGSNR || '6a2a6a80adb860.94634519';
+const FIELD_VORNAME = process.env.PASSCREATOR_FIELD_VORNAME || '6a2a6a80adb899.11243033';
+const FIELD_NACHNAME = process.env.PASSCREATOR_FIELD_NACHNAME || '6a2a6a80adb8b4.30308411';
 
 const isConfigured = () => !!process.env.PASSCREATOR_API_KEY;
 

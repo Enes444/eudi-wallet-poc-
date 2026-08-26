@@ -37,7 +37,15 @@ setInterval(() => { const n = Date.now(); for (const [id,s] of sessions) if (s.e
 // Pfade über Env-Variablen konfigurierbar, Default: ~/Desktop/eudi-rp-cert/
 const RP_KEY_DIR = process.env.RP_KEY_DIR || path.join(require('os').homedir(), 'Desktop', 'eudi-rp-cert');
 const RP_PRIVATE_KEY_FILE = process.env.RP_PRIVATE_KEY_FILE || path.join(RP_KEY_DIR, 'key_private.pem');
-const RP_CERT_FILE = process.env.RP_CERT_FILE || path.join(RP_KEY_DIR, 'certificate-b23bf4273a1e1d03df191d02e0d783a8.crt');
+// Kein fester Dateiname: der Registrar liefert das Zertifikat mit einem eigenen Hash-Namen,
+// der sich bei jeder Neuausstellung ändert. Wir nehmen die (einzige) .crt-Datei im Verzeichnis.
+function findCertFile(dir) {
+  try {
+    const crt = fs.readdirSync(dir).find(f => f.endsWith('.crt'));
+    return crt ? path.join(dir, crt) : null;
+  } catch { return null; }
+}
+const RP_CERT_FILE = process.env.RP_CERT_FILE || findCertFile(RP_KEY_DIR) || path.join(RP_KEY_DIR, 'certificate.crt');
 
 let rpPrivateKey, rpPublicKey, rpCertDer, issuerPublicKey, issuerPublicJwk;
 async function initKeys() {
@@ -87,10 +95,24 @@ function buildPresentationDefinition(pidOnly) {
   };
 }
 // DCQL-Query nach Developer Guide — für Anfragen an die echte Sandbox-Wallet (deutsche Test-PID)
-const PID_VCT = process.env.PID_VCT || 'urn:eudi:pid:1';
-const PID_VCTS = [...new Set([PID_VCT, 'urn:eudi:pid:1', 'urn:eudi:pid:de:1', 'urn:eu.europa.ec.eudi:pid:1'])];
-const DCQL_PID = { credentials: [ { id:'pid', format:'dc+sd-jwt', meta:{ vct_values: PID_VCTS },
-  claims: [ { path:['age_equal_or_over','18'] }, { path:['given_name'] }, { path:['family_name'] } ] } ] };
+// Offizieller vct laut Issuer-Metadaten (Bundesdruckerei preprod):
+// https://preprod.pid-provider.bundesdruckerei.de/.well-known/openid-credential-issuer
+// → credential_configurations_supported["pid-sd-jwt"].vct === "urn:eudi:pid:de:1"
+// Die anderen beiden Werte sind unbestätigte Varianten aus älteren Spec-Entwürfen
+// (Fallback, falls sich der Issuer-Wert nochmal ändert) — nicht vom Issuer bestätigt.
+const PID_VCT = process.env.PID_VCT || 'urn:eudi:pid:de:1';
+const PID_VCTS = [...new Set([PID_VCT, 'urn:eudi:pid:de:1', 'urn:eudi:pid:1', 'urn:eu.europa.ec.eudi:pid:1'])];
+const PID_CLAIMS = [ { path:['age_equal_or_over','18'] }, { path:['given_name'] }, { path:['family_name'] } ];
+// Zwei Format-Varianten als Alternative (credential_sets = ODER):
+// 'dc+sd-jwt' versteht die offizielle Sandbox-Wallet, 'vc+sd-jwt' (älterer Media-Type,
+// laut docs.wallet.lissi.id/home/technical-specifications SD-JWT VC Draft 11) die Lissi-Wallet.
+const DCQL_PID = {
+  credentials: [
+    { id:'pid_dcsdjwt', format:'dc+sd-jwt', meta:{ vct_values: PID_VCTS }, claims: PID_CLAIMS },
+    { id:'pid_vcsdjwt', format:'vc+sd-jwt', meta:{ vct_values: PID_VCTS }, claims: PID_CLAIMS },
+  ],
+  credential_sets: [ { options: [ ['pid_dcsdjwt'], ['pid_vcsdjwt'] ] } ],
+};
 const VP_FORMATS = { 'dc+sd-jwt': { 'sd-jwt_alg_values':['ES256'], 'kb-jwt_alg_values':['ES256'] },
                      'vc+sd-jwt': { 'sd-jwt_alg_values':['ES256'], 'kb-jwt_alg_values':['ES256'] } };
 
@@ -178,9 +200,7 @@ const server = http.createServer(async (req, res) => {
       aud: 'https://self-issued.me/v2',
       client_metadata: {
         jwks: { keys: [s.encPubJwk] },
-        vp_formats_supported: {
-          'dc+sd-jwt': { 'kb-jwt_alg_values':['ES256'], 'sd-jwt_alg_values':['ES256'] },
-        },
+        vp_formats_supported: VP_FORMATS,
         encrypted_response_enc_values_supported: ['A128GCM','A256GCM'],
       },
     } : {};
@@ -262,8 +282,12 @@ const server = http.createServer(async (req, res) => {
       try {
         const { claims } = await verifyPresentation(token, issuerPublicKey, s.nonce, CLIENT_ID);
         all[credType] = claims;
+        // DCQL liefert je nach gematchter Format-Variante 'pid_dcsdjwt' oder 'pid_vcsdjwt' zurück
+        // (statt fest 'pid') — auf 'pid' normalisieren, damit validateClaims() es findet.
+        const isPid = credType === 'pid' || credType.startsWith('pid_');
+        if (isPid) all.pid = claims;
         verificationLog.push({ credType, verified: true, tokenPreview: String(token).slice(0, 28), disclosed: Object.keys(claims) });
-        if (credType==='pid') console.log('[PID-CLAIMS]', JSON.stringify(claims));
+        if (isPid) console.log('[PID-CLAIMS]', JSON.stringify(claims));
         console.log(`[VERIFY] ${credType}: Signatur ✓ Disclosures ✓ Nonce ✓ KeyBinding ✓`);
       } catch (e) {
         verificationLog.push({ credType, verified: false, error: e.message });

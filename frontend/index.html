@@ -176,7 +176,6 @@ footer{border-top:1px solid var(--line);margin-top:40px}
       <div class="sc-row" role="group" aria-label="Demo-Szenario">
         <button class="sc" aria-pressed="true"  data-sc="success">Alle Nachweise vorhanden</button>
         <button class="sc" aria-pressed="false" data-sc="no_license">Kein Führerschein</button>
-        <button class="sc" aria-pressed="false" data-sc="underage">Minderjährig</button>
       </div>
     </div>
   </div>
@@ -205,10 +204,11 @@ footer{border-top:1px solid var(--line);margin-top:40px}
       <input type="checkbox" id="walletOptIn">
       Police als Karte in Apple/Google Wallet ablegen und über Neuigkeiten dazu benachrichtigt werden
     </label>
-    <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:14px">
-      <input type="checkbox" id="pidOnly">
-      Sandbox-Modus: nur Altersnachweis anfragen (Scan mit echter EUDI-Wallet — Führerschein/IBAN existieren dort noch nicht)
-    </label>
+    <p style="margin-top:8px;font-size:13px;color:#666">
+      Hinweis: Beim Scan mit einer echten EUDI-Wallet wird automatisch nur der Altersnachweis geprüft
+      (Führerschein/IBAN existieren dort noch nicht als Credential). Diese Einschränkung gilt nicht für den
+      Browser-Wallet-Simulator.
+    </p>
   </div>
 
   <div class="cta"><button class="btn btn-eu" id="startBtn">Mit EUDI-Wallet fortfahren</button></div>
@@ -321,9 +321,9 @@ fetch(API+'/api/health').then(r=>r.json()).then(h=>{$('#footMode').textContent=h
 /* Schritt 1 → 2 */
 $('#startBtn').addEventListener('click', async ()=>{
   const vehicleData={plate:$('#plate').value,make:$('#make').value,model:$('#model').value,km:$('#km').value,coverage:$('#cov').value,sb:$('#sb').value};
-  const walletOptIn=$('#walletOptIn').checked; const pidOnly=$('#pidOnly').checked;
+  const walletOptIn=$('#walletOptIn').checked;
   try{
-    const r=await fetch(API+'/api/wallet/start-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vehicleData,scenario,walletOptIn,pidOnly})});
+    const r=await fetch(API+'/api/wallet/start-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vehicleData,scenario,walletOptIn})});
     const d=await r.json();
     sessionId=d.sessionId;
     $('#qrImg').src=d.qrCodeDataUrl;
