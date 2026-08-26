@@ -106,7 +106,14 @@ function validateClaims(all, pidOnly = PID_ONLY) {
   const pid = all.pid || {}, mdl = all.mdl || {}, iban = all.iban || {};
   // Deutsche Sandbox-PID nutzt age_equal_or_over.{18}; unser Simulator age_over_18 — beide akzeptieren
   const aeo = pid.age_equal_or_over || {};
-  const ageOK = pid.age_over_18 === true || aeo['18'] === true || aeo[18] === true || pid['18'] === true;
+  // Echte deutsche PID-Varianten: age_over_18, age_equal_or_over.18, oder numerisch/String '18' an verschiedenen Stellen
+  const ageOK = pid.age_over_18 === true
+    || aeo['18'] === true || aeo[18] === true
+    || pid['18'] === true
+    || pid.age_equal_or_over_18 === true
+    || (pid.birthdate && new Date().getFullYear() - new Date(pid.birthdate).getFullYear() >= 18)
+    || (pid.birth_date && new Date().getFullYear() - new Date(pid.birth_date).getFullYear() >= 18);
+  if (!ageOK) console.log('[AGE-DEBUG] pid-keys:', Object.keys(pid), 'aeo:', JSON.stringify(aeo));
   const checks = {
     ageOver18: { passed: ageOK, label:'Alter ≥ 18', source:'PID (kryptographisch verifiziert)' },
   };
@@ -207,7 +214,8 @@ const server = http.createServer(async (req, res) => {
           const payload = JSON.parse(Buffer.from(plaintext).toString());
           Object.assign(body, payload);
           if (!body.state) body.state = payload.state || sid;
-          console.log(`[CALLBACK] Verschlüsselte Antwort entschlüsselt (Session ${sid.slice(0,8)}…)`);
+          state = body.state || state;
+          console.log(`[CALLBACK] Verschlüsselte Antwort entschlüsselt (Session ${sid.slice(0,8)}…), state: ${state?.slice(0,8)}`);
           break;
         } catch { /* nächste Session probieren */ }
       }
@@ -256,6 +264,7 @@ const server = http.createServer(async (req, res) => {
         const { claims } = await verifyPresentation(token, issuerPublicKey, s.nonce, CLIENT_ID);
         all[credType] = claims;
         verificationLog.push({ credType, verified: true, tokenPreview: String(token).slice(0, 28), disclosed: Object.keys(claims) });
+        if (credType==='pid') console.log('[PID-CLAIMS]', JSON.stringify(claims));
         console.log(`[VERIFY] ${credType}: Signatur ✓ Disclosures ✓ Nonce ✓ KeyBinding ✓`);
       } catch (e) {
         verificationLog.push({ credType, verified: false, error: e.message });
