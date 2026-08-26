@@ -73,6 +73,15 @@ h1{font-family:var(--disp);font-weight:700;font-size:clamp(24px,3.4vw,32px);lett
 .premium .v{margin-left:auto;font-family:var(--disp);font-weight:700;font-size:26px}
 .premium .v small{font-size:13px;font-weight:500;color:var(--ink-soft)}
 
+.optin{display:flex;gap:12px;align-items:flex-start;padding:15px 20px;border-top:1px dashed var(--line);cursor:pointer}
+.optin input[type=checkbox]{appearance:none;-webkit-appearance:none;width:19px;height:19px;flex-shrink:0;margin-top:1px;border:1.5px solid var(--line);border-radius:4px;background:#fff;position:relative;cursor:pointer;transition:background .15s,border-color .15s}
+.optin input[type=checkbox]:hover{border-color:var(--eu)}
+.optin input[type=checkbox]:checked{background:var(--eu);border-color:var(--eu)}
+.optin input[type=checkbox]:checked::after{content:"";position:absolute;left:6px;top:2px;width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(40deg)}
+.optin .txt{font-size:13.5px;line-height:1.45}
+.optin .txt b{display:block;font-weight:600;color:var(--ink);margin-bottom:1px}
+.optin .txt span{color:var(--ink-soft)}
+
 .cta{display:flex;justify-content:flex-end;margin-top:20px;gap:10px}
 .btn{border:none;border-radius:4px;padding:12px 22px;font-weight:600;font-size:14.5px;transition:transform .1s, background .15s}
 .btn:active{transform:translateY(1px)}
@@ -205,9 +214,9 @@ footer{border-top:1px solid var(--line);margin-top:40px}
         <select id="sb"><option>150 €</option><option selected>300 €</option><option>500 €</option></select></div>
     </div>
     <div class="premium"><span class="l">Voraussichtlicher Jahresbeitrag</span><span class="v">348 <small>€ / Jahr</small></span></div>
-    <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:14px">
+    <label class="optin">
       <input type="checkbox" id="walletOptIn">
-      Police als Karte in Apple/Google Wallet ablegen und über Neuigkeiten dazu benachrichtigt werden
+      <span class="txt"><b>Police in Apple/Google Wallet ablegen</b><span>Als Karte speichern und über Neuigkeiten dazu benachrichtigt werden.</span></span>
     </label>
   </div>
 
