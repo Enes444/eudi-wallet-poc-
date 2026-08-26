@@ -11,18 +11,51 @@ const url = require('url');
 const jose = require('jose');
 const QRCode = require('qrcode');
 const { verifyPresentation } = require('./sdjwt');
+const { createWalletPass, isConfigured: passcreatorConfigured } = require('./passcreator');
+
+// .env laden (kein Paket nötig — Werte wie der Passcreator-API-Key können & und . enthalten,
+// daher hier selbst geparst statt über die Shell einzulesen)
+function loadEnvFile(fp) {
+  if (!fs.existsSync(fp)) return;
+  for (const line of fs.readFileSync(fp, 'utf8').split('\n')) {
+    const m = line.match(/^\s*([\w.-]+)\s*=\s*(.*)$/);
+    if (!m || !m[1]) continue;
+    if (!(m[1] in process.env)) process.env[m[1]] = m[2].trim();
+  }
+}
+loadEnvFile(path.join(__dirname, '.env'));
 
 const PORT = process.env.PORT || 3001;
 const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
-const CLIENT_ID = PUBLIC_URL;
+let CLIENT_ID = PUBLIC_URL; // wird bei geladenem Registrar-Zertifikat auf das x509_hash-Schema umgestellt
 
 const sessions = new Map();
 setInterval(() => { const n = Date.now(); for (const [id,s] of sessions) if (s.expires < n) sessions.delete(id); }, 300000);
 
 // ── Schlüssel: RP (signiert Requests) + Issuer-Vertrauensanker ────────────────
-let rpKeys, issuerPublicKey, issuerPublicJwk;
+// Registrierter RP-Key (echtes Zertifikat) hat Vorrang vor dem selbstsignierten Test-Key.
+// Pfade über Env-Variablen konfigurierbar, Default: ~/Desktop/eudi-rp-cert/
+const RP_KEY_DIR = process.env.RP_KEY_DIR || path.join(require('os').homedir(), 'Desktop', 'eudi-rp-cert');
+const RP_PRIVATE_KEY_FILE = process.env.RP_PRIVATE_KEY_FILE || path.join(RP_KEY_DIR, 'key_private.pem');
+const RP_CERT_FILE = process.env.RP_CERT_FILE || path.join(RP_KEY_DIR, 'certificate-b23bf4273a1e1d03df191d02e0d783a8.crt');
+
+let rpPrivateKey, rpPublicKey, rpCertDer, issuerPublicKey, issuerPublicJwk;
 async function initKeys() {
-  rpKeys = await jose.generateKeyPair('ES256');
+  const envCert = process.env.RP_CERT_PEM, envKey = process.env.RP_PRIVATE_KEY_PEM;
+  const certPem = envCert || (fs.existsSync(RP_CERT_FILE) ? fs.readFileSync(RP_CERT_FILE,'utf8') : null);
+  const keyPem  = envKey  || (fs.existsSync(RP_PRIVATE_KEY_FILE) ? fs.readFileSync(RP_PRIVATE_KEY_FILE,'utf8') : null);
+  if (certPem && keyPem) {
+    rpPrivateKey = crypto.createPrivateKey(keyPem);
+    rpPublicKey = crypto.createPublicKey(rpPrivateKey);
+    rpCertDer = certPem.replace(/-----(BEGIN|END) CERTIFICATE-----/g, '').replace(/\s+/g, '');
+    // OpenID4VP x509_hash-Schema: client_id = base64url(SHA-256 über das DER-Zertifikat)
+    CLIENT_ID = 'x509_hash:' + crypto.createHash('sha256').update(Buffer.from(rpCertDer,'base64')).digest('base64url');
+    console.log(`✅ Registriertes RP-Zertifikat geladen (${envCert?'ENV':'Datei'}) — client_id: ${CLIENT_ID.slice(0,32)}…`);
+  } else {
+    const kp = await jose.generateKeyPair('ES256');
+    rpPrivateKey = kp.privateKey; rpPublicKey = kp.publicKey; rpCertDer = null;
+    console.log('⚠️  Kein RP-Zertifikat gefunden — selbstsignierter Test-Key (nur für Browser-Simulator, echte Wallets lehnen ihn ab)');
+  }
   // Issuer-Public-Key aus Datei (wird vom Test-Wallet / Issuer-Setup erzeugt)
   const trustFile = path.join(__dirname, 'trust-registry.json');
   if (fs.existsSync(trustFile)) {
@@ -34,31 +67,54 @@ async function initKeys() {
   }
 }
 
-const PRESENTATION_DEFINITION = {
-  id: 'oev-kfz-pd-1',
-  name: 'OEV KFZ-Versicherung',
-  purpose: 'Identitätsprüfung für Versicherungsabschluss',
+// PID_ONLY=1: für Tests mit einer echten Sandbox-Wallet, die nur ein Test-PID
+// ausstellt (Führerschein/IBAN sind fiktive Credential-Typen dieses Projekts).
+const PID_ONLY = process.env.PID_ONLY === '1';
+
+function buildPresentationDefinition(pidOnly) {
+  return {
+  id: 'kfz-versicherung-check',
   input_descriptors: [
-    { id: 'pid',  name: 'Personalausweis', format: { 'vc+sd-jwt': {} },
-      constraints: { limit_disclosure: 'required', fields: [{ path: ['$.age_over_18'] }] } },
-    { id: 'mdl',  name: 'Führerschein',    format: { 'vc+sd-jwt': {} },
-      constraints: { limit_disclosure: 'required', fields: [{ path: ['$.driving_privileges'] }] } },
-    { id: 'iban', name: 'Bankverbindung',  format: { 'vc+sd-jwt': {} },
-      constraints: { limit_disclosure: 'required', fields: [{ path: ['$.iban'] }] } },
+    { id: 'pid',  name: 'Identität (PID)', format: { 'vc+sd-jwt': {} },
+      constraints: { limit_disclosure: 'required', fields: [{ path: ['$.given_name'] }, { path: ['$.family_name'] }, { path: ['$.age_over_18'] }] } },
+    ...(pidOnly ? [] : [
+      { id: 'mdl',  name: 'Führerschein',    format: { 'vc+sd-jwt': {} },
+        constraints: { limit_disclosure: 'required', fields: [{ path: ['$.driving_privileges'] }] } },
+      { id: 'iban', name: 'Bankverbindung',  format: { 'vc+sd-jwt': {} },
+        constraints: { limit_disclosure: 'required', fields: [{ path: ['$.iban'] }] } },
+    ]),
   ],
-};
+  };
+}
+// DCQL-Query nach Developer Guide — für Anfragen an die echte Sandbox-Wallet (deutsche Test-PID)
+const PID_VCT = process.env.PID_VCT || 'urn:eudi:pid:1';
+const PID_VCTS = [...new Set([PID_VCT, 'urn:eudi:pid:1', 'urn:eudi:pid:de:1', 'urn:eu.europa.ec.eudi:pid:1'])];
+const DCQL_PID = { credentials: [ { id:'pid', format:'dc+sd-jwt', meta:{ vct_values: PID_VCTS },
+  claims: [ { path:['age_equal_or_over','18'] }, { path:['given_name'] }, { path:['family_name'] } ] } ] };
+const VP_FORMATS = { 'dc+sd-jwt': { 'sd-jwt_alg_values':['ES256'], 'kb-jwt_alg_values':['ES256'] },
+                     'vc+sd-jwt': { 'sd-jwt_alg_values':['ES256'], 'kb-jwt_alg_values':['ES256'] } };
 
 const setCors = r => { r.setHeader('Access-Control-Allow-Origin','*'); r.setHeader('Access-Control-Allow-Methods','GET,POST,OPTIONS'); r.setHeader('Access-Control-Allow-Headers','Content-Type'); };
 const json = (r,s,d) => { setCors(r); r.writeHead(s,{'Content-Type':'application/json'}); r.end(JSON.stringify(d,null,2)); };
-const readBody = req => new Promise(res => { let b=''; req.on('data',d=>b+=d); req.on('end',()=>{ try{res(JSON.parse(b))}catch{res({})} }); });
+const readBody = req => new Promise(res => { let b=''; req.on('data',d=>b+=d); req.on('end',()=>{
+  const ct = (req.headers['content-type']||'');
+  if (ct.includes('urlencoded')) return res(Object.fromEntries(new URLSearchParams(b)));
+  try { res(JSON.parse(b)) } catch { try { res(Object.fromEntries(new URLSearchParams(b))) } catch { res({}) } }
+}); });
 
-function validateClaims(all) {
+function validateClaims(all, pidOnly = PID_ONLY) {
   const pid = all.pid || {}, mdl = all.mdl || {}, iban = all.iban || {};
-  return {
-    ageOver18:      { passed: pid.age_over_18 === true, label:'Alter ≥ 18', source:'PID (kryptographisch verifiziert)' },
-    driversLicense: { passed: Array.isArray(mdl.driving_privileges) && mdl.driving_privileges.includes('B'), label:'Führerschein Klasse B', source:'mDL (kryptographisch verifiziert)' },
-    ibanValid:      { passed: typeof iban.iban === 'string' && /^[A-Z]{2}\d{2}/.test(iban.iban.replace(/\s/g,'')), label:'Valide IBAN', source:'EAA (kryptographisch verifiziert)' },
+  // Deutsche Sandbox-PID nutzt age_equal_or_over.{18}; unser Simulator age_over_18 — beide akzeptieren
+  const aeo = pid.age_equal_or_over || {};
+  const ageOK = pid.age_over_18 === true || aeo['18'] === true || aeo[18] === true || pid['18'] === true;
+  const checks = {
+    ageOver18: { passed: ageOK, label:'Alter ≥ 18', source:'PID (kryptographisch verifiziert)' },
   };
+  if (!pidOnly) {
+    checks.driversLicense = { passed: Array.isArray(mdl.driving_privileges) && mdl.driving_privileges.includes('B'), label:'Führerschein Klasse B', source:'mDL (kryptographisch verifiziert)' };
+    checks.ibanValid = { passed: typeof iban.iban === 'string' && /^[A-Z]{2}\d{2}/.test(iban.iban.replace(/\s/g,'')), label:'Valide IBAN', source:'EAA (kryptographisch verifiziert)' };
+  }
+  return checks;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -84,10 +140,17 @@ const server = http.createServer(async (req, res) => {
     const body = await readBody(req);
     const sessionId = crypto.randomUUID();
     const nonce = crypto.randomBytes(16).toString('hex');
-    sessions.set(sessionId, { status:'pending', nonce, vehicleData: body.vehicleData||{}, claims:null, expires: Date.now()+600000 });
+    const pidOnly = body.pidOnly !== undefined ? !!body.pidOnly : PID_ONLY;
+    let encKey = null, encPubJwk = null;
+    if (pidOnly) { // echte Wallet: verschlüsselte Antwort (direct_post.jwt, ECDH-ES)
+      const eph = await jose.generateKeyPair('ECDH-ES', { crv:'P-256', extractable:true });
+      encKey = eph.privateKey;
+      encPubJwk = { ...(await jose.exportJWK(eph.publicKey)), use:'enc', alg:'ECDH-ES', kid:'enc-'+sessionId.slice(0,8) };
+    }
+    sessions.set(sessionId, { status:'pending', nonce, pidOnly, encKey, encPubJwk, vehicleData: body.vehicleData||{}, walletOptIn: !!body.walletOptIn, claims:null, expires: Date.now()+600000 });
 
     const requestUri = `${PUBLIC_URL}/api/wallet/request/${sessionId}`;
-    const openid4vpUri = `openid4vp://authorize?client_id=${encodeURIComponent(CLIENT_ID)}&request_uri=${encodeURIComponent(requestUri)}`;
+    const openid4vpUri = `openid4vp://authorize?client_id=${encodeURIComponent(CLIENT_ID)}&request_uri=${encodeURIComponent(requestUri)}&request_uri_method=get`;
     const qrCodeDataUrl = await QRCode.toDataURL(openid4vpUri, { width: 300, margin: 2 });
 
     console.log(`[START] ${sessionId}`);
@@ -100,11 +163,24 @@ const server = http.createServer(async (req, res) => {
     const id = pathname.split('/').pop();
     const s = sessions.get(id);
     if (!s) return json(res, 404, { error:'Session nicht gefunden' });
+    const header = { alg:'ES256', typ:'oauth-authz-req+jwt' };
+    if (rpCertDer) header.x5c = [rpCertDer];
+    const useDcql = s.pidOnly && !!rpCertDer; // echte Sandbox-Wallet: DCQL + x509_hash + verschlüsselte Antwort
+    const query = useDcql ? { dcql_query: DCQL_PID } : { presentation_definition: buildPresentationDefinition(s.pidOnly) };
+    const extra = useDcql ? {
+      aud: 'https://self-issued.me/v2',
+      client_metadata: {
+        jwks: { keys: [s.encPubJwk] },
+        vp_formats: VP_FORMATS, vp_formats_supported: VP_FORMATS,
+        authorization_encrypted_response_alg:'ECDH-ES', authorization_encrypted_response_enc:'A128GCM',
+      },
+    } : {};
     const requestObject = await new jose.SignJWT({
-      response_type:'vp_token', response_mode:'direct_post',
+      response_type:'vp_token', response_mode: useDcql ? 'direct_post.jwt' : 'direct_post',
       client_id: CLIENT_ID, response_uri: `${PUBLIC_URL}/api/wallet/callback`,
-      nonce: s.nonce, state: id, presentation_definition: PRESENTATION_DEFINITION,
-    }).setProtectedHeader({ alg:'ES256', typ:'oauth-authz-req+jwt' }).setIssuedAt().setExpirationTime('10m').sign(rpKeys.privateKey);
+      nonce: s.nonce, state: id, ...query, ...extra,
+    }).setProtectedHeader(header).setIssuedAt().setExpirationTime('10m').sign(rpPrivateKey);
+    if (useDcql) console.log(`[REQUEST] DCQL-Modus (echte Wallet) für ${id}`);
     setCors(res); res.writeHead(200, {'Content-Type':'application/oauth-authz-req+jwt'});
     console.log(`[REQUEST] Signiertes Request Object für ${id} ausgeliefert`);
     return res.end(requestObject);
@@ -112,22 +188,46 @@ const server = http.createServer(async (req, res) => {
 
   // GET /api/rp-jwks — Public Key der RP (damit Wallet die Signatur prüfen kann)
   if (req.method === 'GET' && pathname === '/api/rp-jwks') {
-    const jwk = await jose.exportJWK(rpKeys.publicKey);
+    const jwk = await jose.exportJWK(rpPublicKey);
     return json(res, 200, { keys: [ { ...jwk, alg:'ES256', use:'sig' } ] });
   }
 
   // POST /api/wallet/callback — VP Tokens empfangen & KRYPTOGRAPHISCH VERIFIZIEREN
   if (req.method === 'POST' && pathname === '/api/wallet/callback') {
     const body = await readBody(req);
-    const { state, vp_tokens, action } = body;
+    // direct_post.jwt: verschlüsselte Antwort entschlüsseln (JWE im Feld 'response')
+    if (body.response && typeof body.response === 'string' && body.response.split('.').length === 5) {
+      for (const [sid, sess] of sessions) {
+        if (!sess.encKey) continue;
+        try {
+          const { plaintext } = await jose.compactDecrypt(body.response, sess.encKey);
+          const payload = JSON.parse(Buffer.from(plaintext).toString());
+          Object.assign(body, payload);
+          if (!body.state) body.state = payload.state || sid;
+          console.log(`[CALLBACK] Verschlüsselte Antwort entschlüsselt (Session ${sid.slice(0,8)}…)`);
+          break;
+        } catch { /* nächste Session probieren */ }
+      }
+    }
+    let { state, vp_tokens, action } = body;
     const s = sessions.get(state);
     if (!s) return json(res, 400, { error:'Session nicht gefunden' });
 
     if (action === 'reject') { s.status='rejected'; return json(res,200,{ok:true,status:'rejected'}); }
     if (!issuerPublicKey) return json(res, 500, { error:'Trust Registry fehlt — node test-wallet.js setup' });
 
-    // Browser-Simulator ("Freigeben"-Klick): Server führt den ECHTEN Krypto-Flow aus
+    // Echte Wallet (direct_post): vp_token als String / JSON-Objekt / Array (DCQL: {pid:[token]})
     let tokens = vp_tokens;
+    if (!tokens && body.vp_token) {
+      let vt = body.vp_token;
+      if (typeof vt === 'string') { try { vt = JSON.parse(vt); } catch { /* roher SD-JWT-String */ } }
+      if (typeof vt === 'string') tokens = { pid: vt };
+      else if (Array.isArray(vt)) tokens = { pid: vt[0] };
+      else if (vt && typeof vt === 'object') tokens = vt;
+      console.log(`[CALLBACK] Echte Wallet-Antwort empfangen (${req.headers['content-type']||'?'})`);
+    }
+    if (tokens) for (const k of Object.keys(tokens)) if (Array.isArray(tokens[k])) tokens[k] = tokens[k][0];
+
     if (!tokens && action === 'approve') {
       const { createPresentation } = require('./sdjwt');
       const store = JSON.parse(fs.readFileSync(path.join(__dirname,'wallet-storage.json')));
@@ -171,7 +271,7 @@ const server = http.createServer(async (req, res) => {
     if (s.status === 'rejected') { sessions.delete(id); return json(res, 200, { status:'rejected' }); }
     if (s.status === 'approved') {
       s.status = 'verified';
-      const checks = validateClaims(s.claims || {});
+      const checks = validateClaims(s.claims || {}, s.pidOnly);
       const ok = Object.values(checks).every(c => c.passed);
       const policy = ok ? {
         policyNumber:`OEV-${new Date().getFullYear()}-${Math.floor(10000+Math.random()*90000)}`,
@@ -181,6 +281,21 @@ const server = http.createServer(async (req, res) => {
         paymentMethod:s.claims.iban?.iban ? s.claims.iban.iban.slice(0,4)+'****'+s.claims.iban.iban.slice(-4) : '—',
         walletVerified:true, cryptographicallyVerified:true,
       } : null;
+
+      if (ok && passcreatorConfigured()) {
+        try {
+          const pass = await createWalletPass({
+            optIn: s.walletOptIn,
+            kennzeichen: s.vehicleData.plate || '',
+            versicherungsnummer: policy.policyNumber,
+            vorname: s.claims.pid?.given_name || '',
+            nachname: s.claims.pid?.family_name || '',
+          });
+          policy.walletPass = { downloadPage: pass.downloadPage, iPhoneUri: pass.iPhoneUri };
+        } catch (e) {
+          console.log(`[PASSCREATOR] Fehler: ${e.message}`);
+        }
+      }
       return json(res, 200, { status: ok?'success':'failed', checks, policy, verificationLog: s.verificationLog });
     }
     return json(res, 200, { status:s.status });
