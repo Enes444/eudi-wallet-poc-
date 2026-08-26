@@ -180,7 +180,6 @@ const server = http.createServer(async (req, res) => {
         jwks: { keys: [s.encPubJwk] },
         vp_formats_supported: {
           'dc+sd-jwt': { 'kb-jwt_alg_values':['ES256'], 'sd-jwt_alg_values':['ES256'] },
-          'mso_mdoc': { 'alg':['ES256'] },
         },
         encrypted_response_enc_values_supported: ['A128GCM','A256GCM'],
       },
