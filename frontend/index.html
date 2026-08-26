@@ -323,7 +323,9 @@ $('#startBtn').addEventListener('click', async ()=>{
   const vehicleData={plate:$('#plate').value,make:$('#make').value,model:$('#model').value,km:$('#km').value,coverage:$('#cov').value,sb:$('#sb').value};
   const walletOptIn=$('#walletOptIn').checked;
   try{
-    const r=await fetch(API+'/api/wallet/start-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vehicleData,scenario,walletOptIn})});
+    // pidOnly explizit false: Browser-Demo prüft immer alle 3 Nachweise, unabhängig von einer
+    // eventuell serverseitig für Telefon-Tests gesetzten PID_ONLY-Env-Variable (siehe server_v4.js).
+    const r=await fetch(API+'/api/wallet/start-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vehicleData,scenario,walletOptIn,pidOnly:false})});
     const d=await r.json();
     sessionId=d.sessionId;
     $('#qrImg').src=d.qrCodeDataUrl;
