@@ -1,7 +1,8 @@
 /**
  * SD-JWT Implementierung (Selective Disclosure JWT)
  * Nach IETF draft-ietf-oauth-selective-disclosure-jwt
- * v8-FINAL: Echte Bundesdruckerei-PID kompatibel (TOFU-Modus für nested _sd)
+ * Unterstützt echte Bundesdruckerei-PID (x5c) inkl. verschachtelter Disclosures
+ * (object-property _sd UND array-element "..."-Digests, siehe walk() unten).
  */
 const crypto = require('crypto');
 const jose = require('jose');
@@ -63,8 +64,9 @@ async function createPresentation(credential, revealKeys, holderPrivateKey, nonc
 /**
  * VERIFIER: Verifiziert einen VP Token.
  * Unterstützt sowohl Demo-Issuer als auch echte Bundesdruckerei-PID (via x5c).
- * POC-Modus: Disclosure-Hash-Fehler werden toleriert (nested _sd der echten PID),
- * Issuer-Signatur und Key-Binding werden weiterhin geprüft.
+ * Key-Binding wird best-effort geprüft: bei x5c-vertrauten (echten) Tokens wird ein
+ * Fehlschlag nicht hart abgelehnt (siehe kbVerified im Rückgabewert — der Aufrufer
+ * muss das selbst auswerten, statt sich auf ein pauschales "verified:true" zu verlassen).
  */
 async function verifyPresentation(vpToken, issuerPublicKey, expectedNonce, expectedAudience) {
   const parts = vpToken.split('~');
@@ -92,23 +94,30 @@ async function verifyPresentation(vpToken, issuerPublicKey, expectedNonce, expec
     }
   }
 
-  // 2. Disclosures extrahieren — alle _sd-Hashes sammeln (auch nested)
+  // 2. Disclosures extrahieren — alle _sd-Hashes sammeln (auch verschachtelt).
+  // SD-JWT kennt zwei Digest-Formen: object-property (_sd-Array am Objekt) UND
+  // array-element (jedes Array-Element ein {"...": "<digest>"}-Objekt, z.B. bei
+  // "nationalities" in der echten PID). Vorher wurde nur die erste Form erkannt —
+  // dadurch schlugen Disclosure-Hash-Prüfungen für array-basierte Felder fälschlich
+  // fehl und mussten "toleriert" werden. Mit beiden Formen ist die Prüfung wieder streng.
   const claims = {};
   const allSd = [];
   (function walk(o) {
     if (!o || typeof o !== 'object') return;
+    if (Array.isArray(o)) {
+      for (const item of o) {
+        if (item && typeof item === 'object' && typeof item['...'] === 'string') allSd.push(item['...']);
+        else walk(item);
+      }
+      return;
+    }
     if (Array.isArray(o._sd)) allSd.push(...o._sd);
     for (const v of Object.values(o)) walk(v);
   })(payload);
 
   for (const d of disclosures) {
     const digest = sha256b64u(d);
-    const inSd = allSd.includes(digest);
-    if (!inSd && issuerTrust.startsWith('x5c:')) {
-      console.log('[SDWT] Disclosure-Hash nicht in _sd (echte PID via x5c → POC-Modus: toleriert)');
-    } else if (!inSd) {
-      throw new Error('Disclosure-Hash nicht im Credential — Manipulation erkannt');
-    }
+    if (!allSd.includes(digest)) throw new Error('Disclosure-Hash nicht im Credential — Manipulation erkannt');
     try {
       const decoded = JSON.parse(Buffer.from(d, 'base64url').toString());
       if (Array.isArray(decoded) && decoded.length >= 3) {
@@ -119,7 +128,7 @@ async function verifyPresentation(vpToken, issuerPublicKey, expectedNonce, expec
   }
 
   // 3. Key-Binding-JWT — versuche Holder-Key aus cnf
-  let kbVerified = false;
+  let kbVerified = false, kbError = null;
   if (payload.cnf?.jwk) {
     try {
       const holderKey = await jose.importJWK(payload.cnf.jwk, 'ES256');
@@ -130,15 +139,18 @@ async function verifyPresentation(vpToken, issuerPublicKey, expectedNonce, expec
       if (kb.sd_hash !== sha256b64u(presentationPart)) throw new Error('sd_hash mismatch');
       kbVerified = true;
     } catch (e) {
-      console.log(`[KB-JWT] Prüfung nicht bestanden (${e.message}) — POC-Modus: weiter`);
+      kbError = e.message;
+      console.log(`[KB-JWT] Prüfung nicht bestanden (${e.message})`);
     }
+  } else {
+    kbError = 'Kein Holder-Key (cnf) im Credential';
   }
   if (!kbVerified && !issuerTrust.startsWith('x5c:')) {
     throw new Error('Key-Binding-JWT konnte nicht verifiziert werden');
   }
-  if (!kbVerified) console.log('[KB-JWT] Key-Binding übersprungen (echte PID, POC-Modus)');
+  if (!kbVerified) console.log('[KB-JWT] Key-Binding übersprungen (echte PID, POC-Modus) — Aufrufer muss kbVerified prüfen');
 
-  return { claims, vct: payload.vct, verified: true, issuerTrust };
+  return { claims, vct: payload.vct, verified: true, issuerTrust, kbVerified, kbError };
 }
 
 module.exports = { issueCredential, createPresentation, verifyPresentation, makeDisclosure };

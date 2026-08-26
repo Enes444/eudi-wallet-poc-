@@ -111,11 +111,16 @@ const PID_CLAIMS = [ { path:['age_equal_or_over','18'] }, { path:['given_name'] 
 // (zwei "kein Nachweis"-Dialoge). Deshalb: nur EIN Format pro Anfrage, per User-Agent gewählt.
 const DCQL_PID_DCSDJWT = { credentials: [ { id:'pid', format:'dc+sd-jwt', meta:{ vct_values: PID_VCTS }, claims: PID_CLAIMS } ] };
 const DCQL_PID_VCSDJWT = { credentials: [ { id:'pid', format:'vc+sd-jwt', meta:{ vct_values: PID_VCTS }, claims: PID_CLAIMS } ] };
-function pickDcqlQuery(userAgent) {
-  return /lissi/i.test(userAgent || '') ? DCQL_PID_VCSDJWT : DCQL_PID_DCSDJWT;
-}
 const VP_FORMATS = { 'dc+sd-jwt': { 'sd-jwt_alg_values':['ES256'], 'kb-jwt_alg_values':['ES256'] },
                      'vc+sd-jwt': { 'sd-jwt_alg_values':['ES256'], 'kb-jwt_alg_values':['ES256'] } };
+// client_metadata.vp_formats_supported soll nur das Format enthalten, das die jeweilige Anfrage
+// tatsächlich anfordert — nicht pauschal beide (führte früher schon einmal zu Verwirrung bei der
+// Wallet-seitigen Format-/Typ-Zuordnung, siehe mso_mdoc-Fix weiter oben in der Historie).
+function pickDcqlQuery(userAgent) {
+  const isLissi = /lissi/i.test(userAgent || '');
+  const format = isLissi ? 'vc+sd-jwt' : 'dc+sd-jwt';
+  return { dcql: isLissi ? DCQL_PID_VCSDJWT : DCQL_PID_DCSDJWT, vpFormats: { [format]: VP_FORMATS[format] } };
+}
 
 const setCors = r => { r.setHeader('Access-Control-Allow-Origin','*'); r.setHeader('Access-Control-Allow-Methods','GET,POST,OPTIONS'); r.setHeader('Access-Control-Allow-Headers','Content-Type'); };
 const json = (r,s,d) => { setCors(r); r.writeHead(s,{'Content-Type':'application/json'}); r.end(JSON.stringify(d,null,2)); };
@@ -199,12 +204,13 @@ const server = http.createServer(async (req, res) => {
     const header = { alg:'ES256', typ:'oauth-authz-req+jwt' };
     if (rpCertDer) header.x5c = [rpCertDer];
     const useDcql = !!rpCertDer; // Zertifikat vorhanden ⇒ Abnehmer ist eine echte Wallet ⇒ immer DCQL (Häkchen-/Cache-sicher)
-    const query = useDcql ? { dcql_query: pickDcqlQuery(req.headers['user-agent']) } : { presentation_definition: buildPresentationDefinition(s.pidOnly) };
+    const picked = useDcql ? pickDcqlQuery(req.headers['user-agent']) : null;
+    const query = useDcql ? { dcql_query: picked.dcql } : { presentation_definition: buildPresentationDefinition(s.pidOnly) };
     const extra = useDcql ? {
       aud: 'https://self-issued.me/v2',
       client_metadata: {
         jwks: { keys: [s.encPubJwk] },
-        vp_formats_supported: VP_FORMATS,
+        vp_formats_supported: picked.vpFormats,
         encrypted_response_enc_values_supported: ['A128GCM','A256GCM'],
       },
     } : {};
@@ -286,15 +292,15 @@ const server = http.createServer(async (req, res) => {
     const all = {}; const verificationLog = [];
     for (const [credType, token] of Object.entries(vp_tokens_final)) {
       try {
-        const { claims } = await verifyPresentation(token, issuerPublicKey, s.nonce, CLIENT_ID);
+        const { claims, kbVerified, kbError } = await verifyPresentation(token, issuerPublicKey, s.nonce, CLIENT_ID);
         all[credType] = claims;
         // DCQL liefert je nach gematchter Format-Variante 'pid_dcsdjwt' oder 'pid_vcsdjwt' zurück
         // (statt fest 'pid') — auf 'pid' normalisieren, damit validateClaims() es findet.
         const isPid = credType === 'pid' || credType.startsWith('pid_');
         if (isPid) all.pid = claims;
-        verificationLog.push({ credType, verified: true, tokenPreview: String(token).slice(0, 28), disclosed: Object.keys(claims) });
+        verificationLog.push({ credType, verified: true, kbVerified, tokenPreview: String(token).slice(0, 28), disclosed: Object.keys(claims) });
         if (isPid) console.log('[PID-CLAIMS]', JSON.stringify(claims));
-        console.log(`[VERIFY] ${credType}: Signatur ✓ Disclosures ✓ Nonce ✓ KeyBinding ✓`);
+        console.log(`[VERIFY] ${credType}: Signatur ✓ Disclosures ✓ Nonce ✓ KeyBinding ${kbVerified ? '✓' : `✕ übersprungen (${kbError})`}`);
       } catch (e) {
         verificationLog.push({ credType, verified: false, error: e.message });
         console.log(`[VERIFY] ${credType}: FEHLGESCHLAGEN — ${e.message}`);
