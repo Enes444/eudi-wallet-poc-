@@ -177,7 +177,10 @@ const server = http.createServer(async (req, res) => {
       encKey = eph.privateKey;
       encPubJwk = { ...(await jose.exportJWK(eph.publicKey)), alg:'ECDH-ES', use:'enc', kid: crypto.randomUUID() };
     }
-    sessions.set(sessionId, { status:'pending', nonce, pidOnly, encKey, encPubJwk, vehicleData: body.vehicleData||{}, walletOptIn: !!body.walletOptIn, claims:null, expires: Date.now()+600000 });
+    // realStrict: bewusst gewählter Test mit echter Wallet, bei dem Führerschein/IBAN NICHT automatisch
+    // übersprungen werden sollen — sie existieren dort nicht, sollen also ehrlich als FEHLT erscheinen,
+    // statt (wie im Normalfall) ganz ausgeblendet zu werden, damit die Demo "erfolgreich" wirkt.
+    sessions.set(sessionId, { status:'pending', nonce, pidOnly, realStrict: !!body.realStrict, encKey, encPubJwk, vehicleData: body.vehicleData||{}, walletOptIn: !!body.walletOptIn, claims:null, expires: Date.now()+600000 });
 
     const requestUri = `${PUBLIC_URL}/api/wallet/request/${sessionId}`;
     const openid4vpUri = `openid4vp://authorize?client_id=${encodeURIComponent(CLIENT_ID)}&request_uri=${encodeURIComponent(requestUri)}&request_uri_method=get`;
@@ -255,7 +258,9 @@ const server = http.createServer(async (req, res) => {
       if (typeof vt === 'string') tokens = { pid: vt };
       else if (Array.isArray(vt)) tokens = { pid: vt[0] };
       else if (vt && typeof vt === 'object') tokens = vt;
-      const sAuto = sessions.get(state); if (sAuto) sAuto.pidOnly = true; // echte Wallet liefert nur PID ⇒ Checks entsprechend
+      // echte Wallet liefert nur PID ⇒ Führerschein/IBAN normalerweise ausblenden (nicht als FEHLT zeigen).
+      // Ausnahme: realStrict — dort bewusst NICHT ausblenden, damit sie ehrlich als FEHLT erscheinen.
+      const sAuto = sessions.get(state); if (sAuto && !sAuto.realStrict) sAuto.pidOnly = true;
       console.log(`[CALLBACK] Echte Wallet-Antwort empfangen (${req.headers['content-type']||'?'})`);
     }
     if (tokens) for (const k of Object.keys(tokens)) if (Array.isArray(tokens[k])) tokens[k] = tokens[k][0];

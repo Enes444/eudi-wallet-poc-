@@ -207,6 +207,10 @@ footer{border-top:1px solid var(--line);margin-top:40px}
     <div class="notice blue" style="margin-top:12px;margin-bottom:0">
       Hinweis: Beim Scan mit einer echten EUDI-Wallet wird automatisch nur der Altersnachweis geprüft.
     </div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:14px">
+      <input type="checkbox" id="realStrict">
+      Echter Test: kein Führerschein und keine IBAN vorhanden (bei Scan mit echter Wallet ehrlich als fehlend anzeigen)
+    </label>
   </div>
 
   <div class="cta"><button class="btn btn-eu" id="startBtn">Mit EUDI-Wallet fortfahren</button></div>
@@ -320,10 +324,13 @@ fetch(API+'/api/health').then(r=>r.json()).then(h=>{$('#footMode').textContent=h
 $('#startBtn').addEventListener('click', async ()=>{
   const vehicleData={plate:$('#plate').value,make:$('#make').value,model:$('#model').value,km:$('#km').value,coverage:$('#cov').value,sb:$('#sb').value};
   const walletOptIn=$('#walletOptIn').checked;
+  const realStrict=$('#realStrict').checked;
   try{
     // pidOnly explizit false: Browser-Demo prüft immer alle 3 Nachweise, unabhängig von einer
     // eventuell serverseitig für Telefon-Tests gesetzten PID_ONLY-Env-Variable (siehe server_v4.js).
-    const r=await fetch(API+'/api/wallet/start-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vehicleData,scenario,walletOptIn,pidOnly:false})});
+    // realStrict: nur bei explizitem Wunsch werden Führerschein/IBAN auch beim Scan mit einer echten
+    // Wallet ehrlich als FEHLT geprüft (statt wie sonst automatisch ausgeblendet).
+    const r=await fetch(API+'/api/wallet/start-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vehicleData,scenario,walletOptIn,pidOnly:false,realStrict})});
     const d=await r.json();
     sessionId=d.sessionId;
     $('#qrImg').src=d.qrCodeDataUrl;
