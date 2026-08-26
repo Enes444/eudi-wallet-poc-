@@ -94,38 +94,57 @@ async function verifyPresentation(vpToken, issuerPublicKey, expectedNonce, expec
     }
   }
 
-  // 2. Disclosures extrahieren — alle _sd-Hashes sammeln (auch verschachtelt).
-  // SD-JWT kennt zwei Digest-Formen: object-property (_sd-Array am Objekt) UND
-  // array-element (jedes Array-Element ein {"...": "<digest>"}-Objekt, z.B. bei
-  // "nationalities" in der echten PID). Vorher wurde nur die erste Form erkannt —
-  // dadurch schlugen Disclosure-Hash-Prüfungen für array-basierte Felder fälschlich
-  // fehl und mussten "toleriert" werden. Mit beiden Formen ist die Prüfung wieder streng.
-  const claims = {};
-  const allSd = [];
-  (function walk(o) {
+  // 2. Disclosures extrahieren — Digests iterativ auflösen (fixed-point), nicht nur einmalig
+  // aus dem statischen Payload sammeln. Grund: verschachtelte Felder wie
+  // age_equal_or_over.18 haben ihren _sd nicht im Roh-Payload, sondern NUR im
+  // dekodierten WERT der übergeordneten Disclosure (hier: "age_equal_or_over").
+  // Der ist erst bekannt, nachdem genau diese Disclosure selbst aufgelöst wurde —
+  // ein einmaliger Baum-Walk über den Roh-Payload findet ihn nie. Deshalb: erst
+  // die im Payload sichtbaren Digests sammeln, dann Disclosures auflösen und dabei
+  // neu sichtbar werdende Digests (aus dem offenbarten Wert) mit aufnehmen, bis
+  // sich nichts mehr auflösen lässt. Erkennt beide SD-JWT-Digest-Formen: object-
+  // property (_sd-Array am Objekt) und array-element ({"...":"<digest>"} in Arrays,
+  // z.B. bei "nationalities").
+  const knownSd = new Set();
+  function collectSd(o) {
     if (!o || typeof o !== 'object') return;
     if (Array.isArray(o)) {
       for (const item of o) {
-        if (item && typeof item === 'object' && typeof item['...'] === 'string') allSd.push(item['...']);
-        else walk(item);
+        if (item && typeof item === 'object' && typeof item['...'] === 'string') knownSd.add(item['...']);
+        else collectSd(item);
       }
       return;
     }
-    if (Array.isArray(o._sd)) allSd.push(...o._sd);
-    for (const v of Object.values(o)) walk(v);
-  })(payload);
-
-  for (const d of disclosures) {
-    const digest = sha256b64u(d);
-    if (!allSd.includes(digest)) throw new Error('Disclosure-Hash nicht im Credential — Manipulation erkannt');
-    try {
-      const decoded = JSON.parse(Buffer.from(d, 'base64url').toString());
-      if (Array.isArray(decoded) && decoded.length >= 3) {
-        const [, key, value] = decoded;
-        if (key !== undefined) claims[key] = value;
-      }
-    } catch { /* ignorieren */ }
+    if (Array.isArray(o._sd)) for (const h of o._sd) knownSd.add(h);
+    for (const v of Object.values(o)) collectSd(v);
   }
+  collectSd(payload);
+
+  const claims = {};
+  const pending = new Map(disclosures.map(d => [sha256b64u(d), d]));
+  let progress = true;
+  while (progress && pending.size) {
+    progress = false;
+    for (const [digest, d] of [...pending]) {
+      if (!knownSd.has(digest)) continue;
+      pending.delete(digest);
+      progress = true;
+      let decoded;
+      try { decoded = JSON.parse(Buffer.from(d, 'base64url').toString()); } catch { continue; }
+      let value;
+      if (Array.isArray(decoded) && decoded.length >= 3) {
+        const [, key, val] = decoded;
+        value = val;
+        if (key !== undefined) claims[key] = val;
+      } else if (Array.isArray(decoded) && decoded.length === 2) {
+        value = decoded[1]; // array-element disclosure [salt, value], kein eigener key
+      } else {
+        continue;
+      }
+      collectSd(value); // ggf. neu sichtbar gewordene verschachtelte _sd-Digests freischalten
+    }
+  }
+  if (pending.size) throw new Error('Disclosure-Hash nicht im Credential — Manipulation erkannt');
 
   // 3. Key-Binding-JWT — versuche Holder-Key aus cnf
   let kbVerified = false, kbError = null;
