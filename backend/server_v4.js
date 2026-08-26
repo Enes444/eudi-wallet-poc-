@@ -145,7 +145,7 @@ const server = http.createServer(async (req, res) => {
     if (pidOnly || rpCertDer) { // echte Wallet: verschlüsselte Antwort (direct_post.jwt, ECDH-ES)
       const eph = await jose.generateKeyPair('ECDH-ES', { crv:'P-256', extractable:true });
       encKey = eph.privateKey;
-      encPubJwk = { ...(await jose.exportJWK(eph.publicKey)), use:'enc', alg:'ECDH-ES', kid:'enc-'+sessionId.slice(0,8) };
+      encPubJwk = { ...(await jose.exportJWK(eph.publicKey)), alg:'ECDH-ES', kid:'enc-'+sessionId.slice(0,8) };
     }
     sessions.set(sessionId, { status:'pending', nonce, pidOnly, encKey, encPubJwk, vehicleData: body.vehicleData||{}, walletOptIn: !!body.walletOptIn, claims:null, expires: Date.now()+600000 });
 
@@ -171,9 +171,11 @@ const server = http.createServer(async (req, res) => {
       aud: 'https://self-issued.me/v2',
       client_metadata: {
         jwks: { keys: [s.encPubJwk] },
-        vp_formats: VP_FORMATS, vp_formats_supported: VP_FORMATS,
-        authorization_encrypted_response_alg:'ECDH-ES', authorization_encrypted_response_enc:'A128GCM',
-        encrypted_response_enc_values_supported:['A128GCM'],
+        vp_formats_supported: {
+          'dc+sd-jwt': { 'kb-jwt_alg_values':['ES256'], 'sd-jwt_alg_values':['ES256'] },
+          'mso_mdoc': { 'alg':['ES256'] },
+        },
+        encrypted_response_enc_values_supported: ['A128GCM'],
       },
     } : {};
     const requestObject = await new jose.SignJWT({
