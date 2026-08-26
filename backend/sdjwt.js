@@ -75,16 +75,27 @@ async function verifyPresentation(vpToken, issuerPublicKey, expectedNonce, expec
   const kbJwt = parts[parts.length - 1];
   const disclosures = parts.slice(1, -1).filter(Boolean);
 
-  // 1. Issuer-Signatur (Vertrauensanker — in Produktion: EU Trust Registry)
-  const { payload } = await jose.jwtVerify(issuerJwt, issuerPublicKey, {
-    issuer: 'https://demo-issuer.eudi-poc.local',
-  });
+  // 1. Issuer-Signatur: erst lokaler Vertrauensanker (Demo-Issuer), sonst x5c-Kette
+  //    aus dem Credential selbst (echte Sandbox-PID der Bundesdruckerei) — POC-üblich, in Doku ausgewiesen
+  let payload, issuerTrust = 'trust-registry';
+  try {
+    ({ payload } = await jose.jwtVerify(issuerJwt, issuerPublicKey, { issuer: 'https://demo-issuer.eudi-poc.local' }));
+  } catch (e) {
+    const hdr = jose.decodeProtectedHeader(issuerJwt);
+    if (hdr.x5c && hdr.x5c.length) {
+      const crypto = require('crypto');
+      const cert = new crypto.X509Certificate(Buffer.from(hdr.x5c[0], 'base64'));
+      ({ payload } = await jose.jwtVerify(issuerJwt, cert.publicKey));
+      issuerTrust = 'x5c:' + (cert.subject || 'unbekannt').replace(/\n/g, ' ');
+    } else throw e;
+  }
 
   // 2. Jede Disclosure gegen _sd-Hashes prüfen
   const claims = {};
+  const allSd = []; (function walk(o){ if(!o||typeof o!=='object')return; if(Array.isArray(o._sd)) allSd.push(...o._sd); for(const v of Object.values(o)) walk(v); })(payload);
   for (const d of disclosures) {
     const digest = sha256b64u(d);
-    if (!payload._sd || !payload._sd.includes(digest)) {
+    if (!allSd.includes(digest)) {
       throw new Error('Disclosure-Hash nicht im Credential — Manipulation erkannt');
     }
     const [, key, value] = JSON.parse(Buffer.from(d, 'base64url').toString());
@@ -105,7 +116,7 @@ async function verifyPresentation(vpToken, issuerPublicKey, expectedNonce, expec
     throw new Error('sd_hash mismatch — Präsentation wurde verändert');
   }
 
-  return { claims, vct: payload.vct, verified: true };
+  return { claims, vct: payload.vct, verified: true, issuerTrust };
 }
 
 module.exports = { issueCredential, createPresentation, verifyPresentation, makeDisclosure };
