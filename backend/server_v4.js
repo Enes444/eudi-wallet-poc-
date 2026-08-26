@@ -145,7 +145,7 @@ const server = http.createServer(async (req, res) => {
     if (pidOnly || rpCertDer) { // echte Wallet: verschlüsselte Antwort (direct_post.jwt, ECDH-ES)
       const eph = await jose.generateKeyPair('ECDH-ES', { crv:'P-256', extractable:true });
       encKey = eph.privateKey;
-      encPubJwk = { ...(await jose.exportJWK(eph.publicKey)), alg:'ECDH-ES', kid:'enc-'+sessionId.slice(0,8) };
+      encPubJwk = { ...(await jose.exportJWK(eph.publicKey)), alg:'ECDH-ES', use:'enc', kid: crypto.randomUUID() };
     }
     sessions.set(sessionId, { status:'pending', nonce, pidOnly, encKey, encPubJwk, vehicleData: body.vehicleData||{}, walletOptIn: !!body.walletOptIn, claims:null, expires: Date.now()+600000 });
 
@@ -175,14 +175,14 @@ const server = http.createServer(async (req, res) => {
           'dc+sd-jwt': { 'kb-jwt_alg_values':['ES256'], 'sd-jwt_alg_values':['ES256'] },
           'mso_mdoc': { 'alg':['ES256'] },
         },
-        encrypted_response_enc_values_supported: ['A128GCM'],
+        encrypted_response_enc_values_supported: ['A128GCM','A256GCM'],
       },
     } : {};
     const requestObject = await new jose.SignJWT({
       response_type:'vp_token', response_mode: useDcql ? 'direct_post.jwt' : 'direct_post',
       client_id: CLIENT_ID, response_uri: `${PUBLIC_URL}/api/wallet/callback`,
       nonce: s.nonce, state: id, ...query, ...extra,
-    }).setProtectedHeader(header).setIssuer(CLIENT_ID).setIssuedAt().setExpirationTime('10m').sign(rpPrivateKey);
+    }).setProtectedHeader(header).setIssuedAt().setExpirationTime('10m').sign(rpPrivateKey);
     if (useDcql) console.log(`[REQUEST] DCQL-Modus (echte Wallet) für ${id}`);
     setCors(res); res.writeHead(200, {'Content-Type':'application/oauth-authz-req+jwt'});
     console.log(`[REQUEST] Signiertes Request Object für ${id} ausgeliefert`);
