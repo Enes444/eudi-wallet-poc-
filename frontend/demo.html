@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Musterversicherung · Kfz-Versicherung online abschließen</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{
+    --brand:#0B3C8C; --brand-deep:#072A63; --brand-soft:#E8EFFA; --accent:#1C7ED6;
+    --ink:#14213D; --ink-soft:#4B5A78; --muted:#7A879E; --line:#DDE3EE; --bg:#F4F6FA; --card:#FFFFFF;
+    --ok:#1B8A4C; --ok-soft:#E6F4EC; --warn:#B4480F; --warn-soft:#FBEBE2; --eu:#0A3D91;
+    --radius:14px; --shadow:0 8px 28px rgba(20,33,61,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif}
+  a{color:var(--brand)}
+  button{font:inherit}
+
+  /* Kopf */
+  .top{background:var(--card);border-bottom:1px solid var(--line)}
+  .top-in{max-width:1120px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:28px}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;color:var(--brand-deep);letter-spacing:.2px;white-space:nowrap}
+  .logo svg{width:30px;height:30px}
+  .nav{display:flex;gap:22px;color:var(--ink-soft);font-size:14px}
+  .nav span{cursor:default}
+  .nav span.on{color:var(--brand);font-weight:600;border-bottom:2px solid var(--brand);padding-bottom:2px}
+  .mode{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:#fff}
+  .seg button{border:0;background:transparent;padding:6px 12px;font-size:12.5px;color:var(--ink-soft);cursor:pointer}
+  .seg button[aria-pressed="true"]{background:var(--brand);color:#fff}
+
+  /* Fortschritt */
+  .steps{max-width:1120px;margin:26px auto 0;padding:0 24px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .step{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:transparent;color:var(--muted);font-size:13px}
+  .step .n{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-weight:700;font-size:12px;background:#fff}
+  .step.on{color:var(--brand-deep);font-weight:600}
+  .step.on .n{border-color:var(--brand);background:var(--brand);color:#fff}
+  .step.done{color:var(--ok)}
+  .step.done .n{border-color:var(--ok);background:var(--ok-soft);color:var(--ok)}
+
+  /* Bühne */
+  main{max-width:1120px;margin:18px auto 60px;padding:0 24px}
+  .stage{display:none}
+  .stage.on{display:block}
+  .role{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--brand);background:var(--brand-soft);padding:5px 10px;border-radius:999px;margin-bottom:12px}
+  .role i{width:8px;height:8px;border-radius:50%;background:var(--brand);display:inline-block}
+  .role.ins{color:#1F2433;background:#E7E9F0}.role.ins i{background:#1F2433}
+  .role.wallet{color:var(--eu);background:#E4ECFC}.role.wallet i{background:var(--eu)}
+  h1{font-size:26px;line-height:1.2;margin:0 0 6px;color:var(--brand-deep)}
+  .lead{color:var(--ink-soft);margin:0 0 18px;max-width:70ch}
+  .grid{display:grid;grid-template-columns:1.3fr .9fr;gap:20px;align-items:start}
+  @media(max-width:860px){.grid{grid-template-columns:1fr}.steps{grid-template-columns:1fr 1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px}
+  .card h2{font-size:16px;margin:0 0 14px;color:var(--brand-deep)}
+  .frow{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .f{display:flex;flex-direction:column;gap:6px}
+  .f label{font-size:12.5px;color:var(--ink-soft);font-weight:600}
+  .f input,.f select{border:1px solid var(--line);border-radius:9px;padding:10px 12px;font:inherit;color:var(--ink);background:#fff}
+  .f input:focus,.f select:focus{outline:2px solid var(--accent);border-color:transparent}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;border:0;border-radius:10px;padding:13px 18px;font-weight:600;cursor:pointer;text-decoration:none}
+  .btn-primary{background:var(--brand);color:#fff;box-shadow:0 6px 16px rgba(11,60,140,.25)}
+  .btn-primary:hover{background:var(--brand-deep)}
+  .btn-ghost{background:#fff;color:var(--brand);border:1px solid var(--line)}
+  .btn-wallet{background:var(--eu);color:#fff;width:100%;padding:15px;font-size:15.5px}
+  .btn-wallet:hover{background:#082F70}
+  .btn-wallet svg{width:22px;height:22px}
+  .alt{margin-top:12px;text-align:center;font-size:12.5px;color:var(--muted)}
+  .alt span{text-decoration:underline dotted;cursor:not-allowed}
+  .side{display:flex;flex-direction:column;gap:14px}
+  .price{display:flex;align-items:baseline;gap:8px}
+  .price b{font-size:30px;color:var(--brand-deep)}
+  .price span{color:var(--muted)}
+  .benefit{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:var(--ink-soft)}
+  .benefit svg{width:18px;height:18px;flex:none;color:var(--ok)}
+  .check{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--ink-soft)}
+  .check input{width:18px;height:18px}
+
+  /* Schritt 2 */
+  .qr-card{display:grid;grid-template-columns:260px 1fr;gap:24px;align-items:center}
+  @media(max-width:860px){.qr-card{grid-template-columns:1fr}}
+  .qr-frame{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;place-items:center}
+  .qr-frame img{width:220px;height:220px;image-rendering:pixelated}
+  .req{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+  .req .r{display:flex;align-items:center;justify-content:space-between;background:var(--bg);border-radius:9px;padding:9px 12px;font-size:13.5px}
+  .req .r b{font-weight:600}
+  .req .r em{font-style:normal;color:var(--ok);font-size:12px;font-weight:700}
+  .waiting{display:flex;align-items:center;gap:10px;color:var(--ink-soft);font-size:13.5px;margin-top:14px}
+  .dots i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--brand);margin-right:4px;animation:b 1.2s infinite}
+  .dots i:nth-child(2){animation-delay:.2s}.dots i:nth-child(3){animation-delay:.4s}
+  @keyframes b{0%,80%,100%{opacity:.25}40%{opacity:1}}
+  .phone{width:250px;height:520px;border-radius:38px;background:#111827;padding:12px;box-shadow:0 30px 60px rgba(20,33,61,.3);margin:0 auto;position:relative}
+  .phone .notch{position:absolute;left:50%;top:14px;transform:translateX(-50%);width:90px;height:20px;border-radius:12px;background:#111827;z-index:2}
+  .phone video,.phone img{width:100%;height:100%;border-radius:28px;object-fit:cover;background:#000;display:block}
+  .phone-wrap{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .tag{font-size:12px;color:var(--muted);text-align:center}
+  .demo-only{display:none}
+  body.demo .demo-only{display:block}
+  body.demo .live-only{display:none}
+
+  /* Schritt 3 */
+  .vlist{display:flex;flex-direction:column;gap:10px}
+  .v{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fff}
+  .v .l{display:flex;flex-direction:column;gap:3px}
+  .v .l b{font-size:14px}
+  .v .l span{font-size:12.5px;color:var(--muted)}
+  .st{font-size:12px;font-weight:700;letter-spacing:.4px;padding:4px 10px;border-radius:999px;background:var(--bg);color:var(--muted);min-width:84px;text-align:center}
+  .st.ok{background:var(--ok-soft);color:var(--ok)}
+  .st.fail{background:var(--warn-soft);color:var(--warn)}
+  .st.run{background:var(--brand-soft);color:var(--brand)}
+
+  /* Schritt 4 */
+  .policy{border:1px solid var(--line);border-radius:var(--radius);background:#fff;box-shadow:var(--shadow);overflow:hidden}
+  .policy .ph{background:linear-gradient(135deg,var(--brand-deep),var(--brand));color:#fff;padding:22px 26px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+  .policy .ph h2{margin:0;font-size:20px;color:#fff}
+  .policy .ph .no{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;opacity:.9}
+  .policy .pb{padding:20px 26px;display:grid;grid-template-columns:1fr 1fr;gap:12px 28px}
+  @media(max-width:600px){.policy .pb{grid-template-columns:1fr}}
+  .kv{display:flex;flex-direction:column;gap:2px;border-bottom:1px dashed var(--line);padding-bottom:10px}
+  .kv span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .kv b{font-weight:600}
+  .verified{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ok);font-weight:700;background:var(--ok-soft);padding:3px 8px;border-radius:999px;margin-left:6px}
+  .actions{display:flex;gap:12px;flex-wrap:wrap;padding:0 26px 22px}
+  .note{margin-top:16px;font-size:13px;color:var(--ink-soft);background:var(--brand-soft);border-radius:10px;padding:12px 14px}
+
+  /* Erklärung */
+  details.why{margin-top:14px;border:1px dashed var(--line);border-radius:10px;padding:10px 14px;color:var(--ink-soft);font-size:13.5px;background:#fff}
+  details.why summary{cursor:pointer;font-weight:600;color:var(--brand)}
+  details.why p{margin:8px 0 0}
+
+  footer{max-width:1120px;margin:0 auto;padding:18px 24px 40px;font-size:12px;color:var(--muted);border-top:1px solid var(--line)}
+  .banner{background:var(--warn-soft);color:var(--warn);padding:10px 14px;border-radius:10px;font-size:13px;display:none;margin-bottom:14px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <div class="logo">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="8" fill="#0B3C8C"/><path d="M9 17.5l4.5 4.5L23 11" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Musterversicherung
+    </div>
+    <nav class="nav"><span>Privatkunden</span><span class="on">Kfz-Versicherung</span><span>Service</span><span>Kontakt</span></nav>
+    <div class="mode">
+      Modus
+      <div class="seg" role="group" aria-label="Modus">
+        <button id="modeLive" aria-pressed="true">Live mit Wallet-App</button>
+        <button id="modeDemo" aria-pressed="false">Demo ohne Handy</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="steps" id="steps">
+  <div class="step on" data-s="1"><span class="n">1</span>Fahrzeug und Tarif</div>
+  <div class="step" data-s="2"><span class="n">2</span>Identität nachweisen</div>
+  <div class="step" data-s="3"><span class="n">3</span>Prüfung</div>
+  <div class="step" data-s="4"><span class="n">4</span>Ihre Police</div>
+</div>
+
+<main>
+  <div class="banner" id="banner">Der Server ist gerade nicht erreichbar. Bitte Seite neu laden oder den Live-Betrieb prüfen.</div>
+
+  <!-- Schritt 1 -->
+  <section class="stage on" id="s1">
+    <div class="role"><i></i>Kundin · am Rechner</div>
+    <h1>Kfz-Versicherung in wenigen Minuten abschließen</h1>
+    <p class="lead">Geben Sie Ihr Fahrzeug an und wählen Sie den Tarif. Ihre Identität bestätigen Sie anschließend mit dem digitalen Ausweis in Ihrer EUDI-Wallet, ohne Ausweiskopie und ohne Video-Ident.</p>
+    <div class="grid">
+      <div class="card">
+        <h2>Ihr Fahrzeug</h2>
+        <div class="frow">
+          <div class="f"><label for="plate">Kennzeichen</label><input id="plate" value="B-XY 1234"></div>
+          <div class="f"><label for="km">Jahresfahrleistung</label><input id="km" value="12.000 km"></div>
+          <div class="f"><label for="make">Hersteller</label><input id="make" value="Volkswagen"></div>
+          <div class="f"><label for="model">Modell</label><input id="model" value="Golf 8"></div>
+          <div class="f"><label for="cov">Deckung</label><select id="cov"><option>Teilkasko</option><option>Vollkasko</option><option>Haftpflicht</option></select></div>
+          <div class="f"><label for="sb">Selbstbeteiligung</label><select id="sb"><option>300 €</option><option>150 €</option><option>500 €</option></select></div>
+        </div>
+        <p class="hint" style="margin-top:14px">Name, Vorname und Volljährigkeit müssen Sie nicht eintippen. Diese Angaben kommen im nächsten Schritt geprüft aus Ihrer Wallet.</p>
+      </div>
+      <div class="side">
+        <div class="card">
+          <div class="price"><b>348 €</b><span>pro Jahr · Teilkasko</span></div>
+          <div class="benefit" style="margin-top:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Sofortiger Versicherungsschutz nach Abschluss</div>
+          <div class="benefit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Keine Ausweiskopie, kein Video-Ident</div>
+          <div class="benefit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Police direkt in Apple oder Google Wallet</div>
+          <label class="check" style="margin-top:14px"><input type="checkbox" id="walletOptIn" checked> Police zusätzlich als Karte in Apple/Google Wallet ablegen</label>
+        </div>
+        <div class="card">
+          <button class="btn btn-wallet" id="startBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3M21 14v7h-7"/></svg>
+            Mit EUDI-Wallet fortfahren
+          </button>
+          <div class="alt">oder <span>klassisch mit Ausweiskopie</span> (in dieser Demo nicht verfügbar)</div>
+        </div>
+      </div>
+    </div>
+    <details class="why"><summary>Was passiert hier?</summary><p>Die Kundin füllt den Antrag wie gewohnt aus. Neu ist der Knopf „Mit EUDI-Wallet fortfahren": Statt Ausweiskopie oder Video-Ident bestätigt sie ihre Identität mit dem staatlichen digitalen Ausweis in ihrer Wallet-App. Der Versicherer bekommt Daten, die die Bundesdruckerei versiegelt hat.</p></details>
+  </section>
+
+  <!-- Schritt 2 -->
+  <section class="stage" id="s2">
+    <div class="role wallet"><i></i>Kundin · Wallet-App auf dem Handy</div>
+    <h1>Identität mit der EUDI-Wallet bestätigen</h1>
+    <p class="lead">Scannen Sie den QR-Code mit der Kamera Ihres Smartphones. Ihre Wallet zeigt Ihnen, wer anfragt und welche Daten übertragen werden. Sie geben mit Ihrer PIN frei.</p>
+    <div class="grid">
+      <div class="card qr-card">
+        <div class="qr-frame"><img id="qrImg" alt="QR-Code für die EUDI-Wallet"></div>
+        <div>
+          <h2>Angefragt werden nur diese Daten</h2>
+          <div class="req">
+            <div class="r"><b>Nachname</b><em>benötigt</em></div>
+            <div class="r"><b>Vorname</b><em>benötigt</em></div>
+            <div class="r"><b>Älter als 18</b><em>benötigt</em></div>
+          </div>
+          <p class="hint" style="margin-top:10px">3 von 21 Feldern des digitalen Ausweises. Geburtsdatum, Anschrift und alle weiteren Angaben bleiben auf Ihrem Handy.</p>
+          <div class="waiting live-only"><span class="dots"><i></i><i></i><i></i></span> Warten auf Ihre Freigabe in der Wallet …</div>
+          <div style="margin-top:14px"><button class="btn btn-ghost" id="cancelBtn">Abbrechen</button></div>
+        </div>
+      </div>
+      <div class="card demo-only">
+        <div class="phone-wrap">
+          <div class="phone"><div class="notch"></div><video id="walletVideo" muted playsinline loop></video></div>
+          <div class="tag">Aufzeichnung der Bundes-Wallet (Closed Beta) aus dem Live-Test</div>
+          <button class="btn btn-primary" id="simBtn">Freigabe simulieren</button>
+          <div class="tag">Im Demo-Modus wird die Antwort der Wallet simuliert. Im Live-Modus kommt sie vom echten Handy.</div>
+        </div>
+      </div>
+      <div class="card live-only">
+        <h2>So geht es auf dem Handy weiter</h2>
+        <div class="vlist">
+          <div class="v"><div class="l"><b>1 · Kamera auf den QR-Code</b><span>Die Wallet-App öffnet sich automatisch.</span></div></div>
+          <div class="v"><div class="l"><b>2 · Anfrage prüfen</b><span>Die Wallet zeigt, wer fragt und welche drei Felder.</span></div></div>
+          <div class="v"><div class="l"><b>3 · Mit PIN freigeben</b><span>Die Antwort geht verschlüsselt an den Versicherer.</span></div></div>
+        </div>
+      </div>
+    </div>
+    <details class="why"><summary>Was passiert hier?</summary><p>Der QR-Code enthält eine signierte Anfrage des Versicherers. Die Wallet prüft dessen Zugangszertifikat und zeigt der Kundin den Namen des Anfragenden. Erst nach ihrer Freigabe mit PIN verlassen genau die drei angefragten Felder das Handy, verschlüsselt und mit dem Siegel der Bundesdruckerei.</p></details>
+  </section>
+
+  <!-- Schritt 3 -->
+  <section class="stage" id="s3">
+    <div class="role ins"><i></i>Versicherer · System</div>
+    <h1>Die Antwort wird geprüft</h1>
+    <p class="lead">Jede Antwort der Wallet durchläuft dieselben Prüfungen. Nur wenn alle bestehen, wird die Police erstellt.</p>
+    <div class="grid">
+      <div class="card">
+        <h2>Technische Prüfung</h2>
+        <div class="vlist" id="techList"></div>
+      </div>
+      <div class="card">
+        <h2>Fachliche Prüfung</h2>
+        <div class="vlist" id="bizList"></div>
+      </div>
+    </div>
+    <details class="why"><summary>Was passiert hier?</summary><p>Das Siegel der Bundesdruckerei belegt, dass der Ausweis echt und unverändert ist. Der Einmalcode verhindert, dass eine alte Antwort erneut eingespielt wird. Die Gerätebindung stellt sicher, dass der Ausweis zum Handy der Kundin gehört. Danach prüft der Versicherer seine eigenen Regeln, zum Beispiel die Volljährigkeit.</p></details>
+  </section>
+
+  <!-- Schritt 4 -->
+  <section class="stage" id="s4">
+    <div class="role ins"><i></i>Versicherer · Ergebnis</div>
+    <h1>Ihre Police ist da</h1>
+    <p class="lead">Der Versicherungsschutz beginnt sofort. Die geprüften Angaben aus Ihrer Wallet sind übernommen.</p>
+    <div class="policy">
+      <div class="ph"><div><h2>Kfz-Versicherungsschein</h2><div class="no" id="pNo"></div></div><div><span class="verified" style="background:rgba(255,255,255,.18);color:#fff">Identität staatlich bestätigt</span></div></div>
+      <div class="pb" id="pRows"></div>
+      <div class="actions">
+        <span id="walletPassCta"></span>
+        <button class="btn btn-ghost" id="againBtn">Neuen Vorgang starten</button>
+      </div>
+    </div>
+    <div class="note">Nur drei Angaben aus dem digitalen Ausweis wurden übertragen: Nachname, Vorname und die Bestätigung „älter als 18". Das Geburtsdatum selbst hat das Handy nie verlassen.</div>
+  </section>
+
+  <!-- Abbruch / fehlgeschlagen -->
+  <section class="stage" id="s5">
+    <div class="role ins"><i></i>Versicherer · Ergebnis</div>
+    <h1 id="failTitle">Abschluss nicht möglich</h1>
+    <p class="lead" id="failWhy"></p>
+    <div class="card"><div class="vlist" id="failList"></div></div>
+    <div style="margin-top:16px"><button class="btn btn-primary" id="againBtn2">Neuen Vorgang starten</button></div>
+  </section>
+</main>
+
+<footer>
+  Prototyp der EUDI-Wallet-Anbindung in der Testumgebung des nationalen Wallet-Projekts. Fiktiver Versicherer, nur Test-Ausweise, keine echten Personen. Keine offizielle Wallet-App. Diese Seite setzt keine Cookies und verfolgt keine Besucher. <span id="footMode"></span>
+</footer>
+
+<script src="media.js"></script>
+<script>
+const API = '';
+const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
+let sessionId = null, poll = null, mode = 'live';
+
+/* Modus */
+function setMode(m){
+  mode = m;
+  document.body.classList.toggle('demo', m === 'demo');
+  $('#modeLive').setAttribute('aria-pressed', m === 'live');
+  $('#modeDemo').setAttribute('aria-pressed', m === 'demo');
+  if (m === 'demo') prepareVideo();
+}
+$('#modeLive').addEventListener('click', () => setMode('live'));
+$('#modeDemo').addEventListener('click', () => setMode('demo'));
+if (new URLSearchParams(location.search).get('mode') === 'demo') setMode('demo');
+
+let videoReady = false;
+function prepareVideo(){
+  if (videoReady || !window.WALLET_VIDEO_B64) return;
+  const bin = atob(window.WALLET_VIDEO_B64), arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  const v = $('#walletVideo');
+  v.src = URL.createObjectURL(new Blob([arr], { type: 'video/mp4' }));
+  if (window.WALLET_POSTER_B64) v.poster = 'data:image/png;base64,' + window.WALLET_POSTER_B64;
+  videoReady = true;
+}
+
+/* Fortschritt */
+function go(stage, n){
+  $$('.stage').forEach(x => x.classList.remove('on'));
+  $('#' + stage).classList.add('on');
+  $$('.step').forEach(s => { const k = +s.dataset.s; s.classList.toggle('on', k === n); s.classList.toggle('done', k < n); });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* Server-Check */
+fetch(API + '/api/health').then(r => r.json()).then(h => { $('#footMode').textContent = 'Serverstatus: ' + (h.mode || 'ok'); }).catch(() => { $('#banner').style.display = 'block'; });
+
+/* Schritt 1 → 2 */
+$('#startBtn').addEventListener('click', async () => {
+  const vehicleData = { plate: $('#plate').value, make: $('#make').value, model: $('#model').value, km: $('#km').value, coverage: $('#cov').value, sb: $('#sb').value };
+  const walletOptIn = $('#walletOptIn').checked;
+  try {
+    const r = await fetch(API + '/api/wallet/start-auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vehicleData, scenario: 'success', walletOptIn }) });
+    const d = await r.json();
+    sessionId = d.sessionId;
+    $('#qrImg').src = d.qrCodeDataUrl;
+    go('s2', 2);
+    startPoll();
+    if (mode === 'demo') { prepareVideo(); const v = $('#walletVideo'); v.currentTime = 0; v.play().catch(() => {}); }
+  } catch { $('#banner').style.display = 'block'; }
+});
+
+/* Demo: Freigabe simulieren (gleicher Weg wie der Wallet-Simulator) */
+$('#simBtn').addEventListener('click', async () => {
+  if (!sessionId) return;
+  $('#simBtn').disabled = true; $('#simBtn').textContent = 'Antwort wird gesendet …';
+  try { await fetch(API + '/api/wallet/callback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state: sessionId, action: 'approve', scenario: 'success' }) }); }
+  catch { $('#banner').style.display = 'block'; }
+  setTimeout(() => { $('#simBtn').disabled = false; $('#simBtn').textContent = 'Freigabe simulieren'; }, 2500);
+});
+$('#cancelBtn').addEventListener('click', () => { stopPoll(); sessionId = null; go('s1', 1); });
+['againBtn', 'againBtn2'].forEach(id => $('#' + id).addEventListener('click', () => { stopPoll(); sessionId = null; go('s1', 1); }));
+
+/* Polling */
+function startPoll(){
+  let n = 0;
+  stopPoll();
+  poll = setInterval(async () => {
+    if (++n > 160) return stopPoll();
+    try {
+      const d = await (await fetch(`${API}/api/wallet/status/${sessionId}`)).json();
+      if (d.status === 'pending' || d.status === 'approved') return;
+      stopPoll();
+      if (d.status === 'rejected') return renderRejected();
+      renderVerification(d);
+    } catch {}
+  }, 1500);
+}
+function stopPoll(){ if (poll) { clearInterval(poll); poll = null; } }
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+/* Schritt 3 */
+const CRED_NAMES = { pid: 'Digitaler Ausweis (PID)', mdl: 'Führerschein (mDL)', iban: 'Bankverbindung (EAA)', eaa: 'Bankverbindung (EAA)' };
+const TECH = [['Siegel des Ausstellers', 'Stammt der Nachweis von der Bundesdruckerei?'],
+              ['Felder unverändert', 'Wurde ein einzelnes Feld manipuliert?'],
+              ['Antwort frisch', 'Einmalcode geprüft, keine Wiederverwendung'],
+              ['An das Handy gebunden', 'Gehört der Nachweis zum Gerät der Kundin?']];
+async function renderVerification(result){
+  go('s3', 3);
+  const log = result.verificationLog || [];
+  const tech = $('#techList'); tech.innerHTML = '';
+  const biz = $('#bizList'); biz.innerHTML = '';
+  // Technische Prüfung je Nachweis
+  log.forEach(v => {
+    const head = document.createElement('div'); head.className = 'v';
+    head.innerHTML = `<div class="l"><b>${CRED_NAMES[v.credType] || v.credType}</b><span>${v.verified ? 'Nachweis empfangen, verschlüsselt' : 'Prüfung fehlgeschlagen'}</span></div><span class="st run">LÄUFT</span>`;
+    tech.appendChild(head);
+    TECH.forEach(([t, s]) => {
+      const row = document.createElement('div'); row.className = 'v'; row.dataset.cred = v.credType; row.dataset.ok = v.verified ? '1' : '0';
+      row.innerHTML = `<div class="l"><b>${t}</b><span>${s}</span></div><span class="st">…</span>`;
+      tech.appendChild(row);
+    });
+  });
+  for (const row of tech.querySelectorAll('.v[data-cred]')) {
+    await wait(420);
+    const st = row.querySelector('.st'); const ok = row.dataset.ok === '1';
+    st.textContent = ok ? 'BESTANDEN' : 'FEHLER'; st.classList.add(ok ? 'ok' : 'fail');
+  }
+  tech.querySelectorAll('.st.run').forEach(s => { s.classList.remove('run'); s.classList.add('ok'); s.textContent = 'GEPRÜFT'; });
+  // Fachliche Prüfung
+  await wait(300);
+  const checks = result.checks || {};
+  for (const [key, c] of Object.entries(checks)) {
+    const row = document.createElement('div'); row.className = 'v';
+    row.innerHTML = `<div class="l"><b>${c.label || key}</b><span>${c.source || ''}</span></div><span class="st">…</span>`;
+    biz.appendChild(row);
+    await wait(380);
+    const st = row.querySelector('.st'); st.textContent = c.passed ? 'ERFÜLLT' : 'FEHLT'; st.classList.add(c.passed ? 'ok' : 'fail');
+  }
+  await wait(700);
+  if (result.status === 'success') renderPolicy(result.policy); else renderFailure(result);
+}
+
+/* Schritt 4 */
+function renderPolicy(p){
+  const v = p?.vehicle || {};
+  $('#pNo').textContent = 'Vorgangs-Nr. ' + (p?.policyNumber || '—');
+  $('#pRows').innerHTML = [
+    ['Versicherungsnehmerin', (p?.holder || '—') + '<span class="verified">aus der Wallet</span>'],
+    ['Fahrzeug', `${v.make || ''} ${v.model || ''}`.trim() + ' · ' + (v.plate || '')],
+    ['Deckung', (p?.coverage || 'Teilkasko') + ' · SB ' + (v.sb || '300 €')],
+    ['Jahresbeitrag', (p?.annualPremium || 348) + ' €'],
+    ['Beitragseinzug', p?.paymentMethod || '—'],
+    ['Beginn des Schutzes', p?.validFrom || 'sofort'],
+  ].map(([k, val]) => `<div class="kv"><span>${k}</span><b>${val}</b></div>`).join('');
+  const wp = p?.walletPass;
+  $('#walletPassCta').innerHTML = wp ? `<a class="btn btn-primary" href="${wp.downloadPage}" target="_blank" rel="noopener">Police in Apple/Google Wallet öffnen</a>` : '';
+  go('s4', 4);
+}
+function renderFailure(result){
+  const failed = Object.entries(result.checks || {}).filter(([, c]) => !c.passed);
+  $('#failTitle').textContent = 'Abschluss nicht möglich';
+  $('#failWhy').textContent = 'Nicht erfüllt: ' + failed.map(([, c]) => c.label).join(' · ');
+  $('#failList').innerHTML = Object.entries(result.checks || {}).map(([, c]) =>
+    `<div class="v"><div class="l"><b>${c.label}</b><span>${c.source || ''}</span></div><span class="st ${c.passed ? 'ok' : 'fail'}">${c.passed ? 'ERFÜLLT' : 'FEHLT'}</span></div>`).join('');
+  go('s5', 4);
+}
+function renderRejected(){
+  $('#failTitle').textContent = 'Freigabe abgelehnt';
+  $('#failWhy').textContent = 'Die Kundin hat die Anfrage in ihrer Wallet abgelehnt. Es wurden keine Daten übertragen. Der Antrag kann klassisch fortgesetzt werden.';
+  $('#failList').innerHTML = '';
+  go('s5', 2);
+}
+</script>
+</body>
+</html>
